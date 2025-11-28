@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* IKEA Light Theme - Inspired by IKEA's blue and yellow */
+    --background: 0 0% 98%;
+    --foreground: 214 100% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 214 100% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 214 100% 20%;
+
+    --primary: 214 100% 36%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 48 100% 50%;
+    --secondary-foreground: 214 100% 20%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 214 50% 40%;
+
+    --accent: 48 100% 50%;
+    --accent-foreground: 214 100% 20%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 88%;
+    --input: 214 32% 88%;
+    --ring: 214 100% 36%;
+
+    --radius: 0.5rem;
+    
+    --gradient-primary: linear-gradient(135deg, hsl(214 100% 36%), hsl(48 100% 50%));
+    --gradient-subtle: linear-gradient(180deg, hsl(210 40% 98%), hsl(210 40% 95%));
+    
+    --shadow-card: 0 2px 8px -2px hsl(214 100% 36% / 0.08);
+    --shadow-hover: 0 4px 16px -4px hsl(214 100% 36% / 0.12);
+    
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 214 100% 20%;
+    --sidebar-primary: 214 100% 36%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 214 100% 20%;
+    --sidebar-border: 214 32% 88%;
+    --sidebar-ring: 214 100% 36%;
+  }
+
+  .dark {
+    /* IKEA Dark Theme - Inspired by IKEA's blue and yellow on dark */
+    --background: 214 40% 12%;
+    --foreground: 48 100% 92%;
+
+    --card: 214 35% 16%;
+    --card-foreground: 48 100% 92%;
+
+    --popover: 214 35% 16%;
+    --popover-foreground: 48 100% 92%;
+
+    --primary: 214 100% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 48 100% 50%;
+    --secondary-foreground: 214 100% 10%;
+
+    --muted: 214 35% 20%;
+    --muted-foreground: 48 80% 70%;
+
+    --accent: 48 100% 50%;
+    --accent-foreground: 214 100% 10%;
+
+    --success: 142 76% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 35% 24%;
+    --input: 214 35% 24%;
+    --ring: 214 100% 50%;
+    
+    --sidebar-background: 214 40% 10%;
+    --sidebar-foreground: 48 100% 92%;
+    --sidebar-primary: 214 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 35% 18%;
+    --sidebar-accent-foreground: 48 100% 92%;
+    --sidebar-border: 214 35% 24%;
+    --sidebar-ring: 214 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
