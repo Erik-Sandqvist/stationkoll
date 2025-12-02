@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, Users, Shuffle, Search, Info, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getEmployeesLastStations, canAssignToStation } from "@/utils/stationRotation";
 
 interface Employee {
   id: string;
@@ -39,10 +40,16 @@ const STATIONS = [
   "Auto Pack",
   "KM",
   "Decating",
+  "Rework",
   "In/Ut",
   "Rep",
   "FL",
 ];
+
+// Stationer som ska visas som del av en annan station
+const SUB_STATIONS: Record<string, string> = {
+  "Rework": "Decating", // Rework visas under Decanting
+};
 
 const DailyPlanning = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -172,43 +179,78 @@ const DailyPlanning = () => {
 
     setLoading(true);
 
-    // Get history for all selected employees
-    const employeeHistories = await Promise.all(
-      selectedEmployees.map(async (empId) => ({
-        id: empId,
-        history: await getEmployeeHistory(empId),
-      }))
-    );
+  // Get last assigned station for each employee
+  const lastStationsMap = await getEmployeesLastStations(selectedEmployees);
 
-    const newAssignments: Record<string, string[]> = {};
-    const assignedEmployees = new Set<string>();
-    const stationsToFill = STATIONS.filter((s) => s !== "FL");
+  // Get history for all selected employees (for 6-month rotation logic)
+  const employeeHistories = await Promise.all(
+    selectedEmployees.map(async (empId) => ({
+      id: empId,
+      history: await getEmployeeHistory(empId),
+      lastStation: lastStationsMap.get(empId) || null,
+    }))
+  );
 
-    // Sort stations by need (highest first)
-    const sortedStations = stationsToFill
-      .filter((station) => (stationNeeds[station] || 0) > 0)
-      .sort((a, b) => (stationNeeds[b] || 0) - (stationNeeds[a] || 0));
+  const newAssignments: Record<string, string[]> = {};
+  const assignedEmployees = new Set<string>();
+  const stationsToFill = STATIONS.filter((s) => s !== "FL");
 
+  // Sort stations by need (highest first)
+  const sortedStations = stationsToFill
+    .filter((station) => (stationNeeds[station] || 0) > 0)
+    .sort((a, b) => (stationNeeds[b] || 0) - (stationNeeds[a] || 0));
+
+  for (const station of sortedStations) {
+    const needed = stationNeeds[station] || 0;
+    newAssignments[station] = [];
+
+    // Filter out employees who were at this station last time
+    // Then sort remaining by least time at this station
+    const available = employeeHistories
+      .filter((emp) => !assignedEmployees.has(emp.id))
+      .filter((emp) => canAssignToStation(emp.id, station, lastStationsMap))
+      .sort((a, b) => {
+        const aCount = a.history[station] || 0;
+        const bCount = b.history[station] || 0;
+        return aCount - bCount;
+      });
+
+    for (let i = 0; i < needed && i < available.length; i++) {
+      const employee = available[i];
+      newAssignments[station].push(employee.id);
+      assignedEmployees.add(employee.id);
+    }
+  }
+
+  // If some employees couldn't be assigned due to last-station restriction,
+  // try to assign them anyway (fallback)
+  const unassignedDueToRestriction = employeeHistories
+    .filter((emp) => !assignedEmployees.has(emp.id));
+  
+  if (unassignedDueToRestriction.length > 0) {
+    // Try to fill remaining needs, ignoring the last-station rule
     for (const station of sortedStations) {
       const needed = stationNeeds[station] || 0;
-      newAssignments[station] = [];
-
-      // Sort employees by least time at this station
-      const available = employeeHistories
-        .filter((emp) => !assignedEmployees.has(emp.id))
-        .sort((a, b) => {
-          const aCount = a.history[station] || 0;
-          const bCount = b.history[station] || 0;
-          return aCount - bCount;
-        });
-
-      for (let i = 0; i < needed && i < available.length; i++) {
-        const employee = available[i];
-        newAssignments[station].push(employee.id);
-        assignedEmployees.add(employee.id);
+      const currentCount = newAssignments[station]?.length || 0;
+      
+      if (currentCount < needed) {
+        const stillAvailable = unassignedDueToRestriction
+          .filter((emp) => !assignedEmployees.has(emp.id))
+          .sort((a, b) => {
+            const aCount = a.history[station] || 0;
+            const bCount = b.history[station] || 0;
+            return aCount - bCount;
+          });
+        
+        for (let i = 0; i < (needed - currentCount) && i < stillAvailable.length; i++) {
+          const employee = stillAvailable[i];
+          if (!newAssignments[station]) newAssignments[station] = [];
+          newAssignments[station].push(employee.id);
+          assignedEmployees.add(employee.id);
+        }
       }
     }
-
+  }
     // Handle FL manual assignment
     if (flManual.trim()) {
       newAssignments["FL"] = [flManual];
@@ -714,12 +756,17 @@ const DailyPlanning = () => {
           return null;
         })()}
 
-        {STATIONS.map((station) => {
+{STATIONS.filter(station => !SUB_STATIONS[station]).map((station) => {
           const assigned = assignments[station] || [];
           const needed = stationNeeds[station] || 0;
           const filledCount = station === "Pack" || station === "Auto Pack" || station === "Auto Plock" 
             ? assigned.filter(a => a).length 
             : assigned.length;
+          
+          // Hitta understationer för denna station
+          const subStations = Object.entries(SUB_STATIONS)
+            .filter(([_, parent]) => parent === station)
+            .map(([sub]) => sub);
 
           return (
             <Card
@@ -800,6 +847,55 @@ const DailyPlanning = () => {
     ))}
   </div>
 )}
+
+ {/* Rendera understationer */}
+ {subStations.map((subStation) => {
+                const subAssigned = assignments[subStation] || [];
+                const subNeeded = stationNeeds[subStation] || 0;
+                
+                return (
+                  <div
+                    key={subStation}
+                    className="mt-4 pt-3 border-t border-gray-200"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => {
+                      e.stopPropagation();
+                      handleDrop(subStation);
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-sm text-black/80">
+                        {subStation}
+                      </h4>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        subAssigned.length >= subNeeded 
+                          ? 'bg-black/60 text-white' 
+                          : 'bg-black/60 text-red-300'
+                      }`}>
+                        {subAssigned.length}/{subNeeded}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {subAssigned.length > 0 ? (
+                        subAssigned.map((empId, idx) => (
+                          <div
+                            key={idx}
+                            draggable
+                            onDragStart={() => handleDragStart(empId, subStation)}
+                            className="text-sm text-black cursor-move p-2 rounded-lg bg-gray-50 hover:bg-primary/25 backdrop-blur-sm transition-all duration-200"
+                          >
+                            • {getEmployeeShortName(empId)}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-gray-400 p-2">
+                          Dra hit för att tilldela
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </Card>
           );
         })}
