@@ -564,7 +564,7 @@ const DailyPlanning = () => {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             {STATIONS.map((station) => (
-              <div key={station} className="space-y-2">
+              <div key={station} className="space-y-2 w-90%">
                 <Label htmlFor={`station-${station}`} className="text-sm font-medium">
                   {station}
                 </Label>
@@ -579,7 +579,7 @@ const DailyPlanning = () => {
                       [station]: parseInt(e.target.value) || 0,
                     })
                   }
-                  className="text-center font-semibold bg-sidebar-input"
+                  className="text-center font-semibold bg-sidebar-input large-spinner h-10"
                   disabled={station === "FL"}
                 />
               </div>

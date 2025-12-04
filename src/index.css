@@ -113,3 +113,20 @@ All colors MUST be HSL.
     @apply bg-background text-foreground font-sans;
   }
 }
+
+/* Gör spinner-knapparna (pilarna) större i number inputs */
+input[type="number"].large-spinner::-webkit-inner-spin-button,
+input[type="number"].large-spinner::-webkit-outer-spin-button {
+  height: 40px;
+  width: 30px;
+  cursor: pointer;
+}
+
+/* För Firefox */
+input[type="number"].large-spinner {
+  -moz-appearance: textfield;
+}
+
+input[type="number"].large-spinner::-moz-number-spinner {
+  height: 40px;
+}
