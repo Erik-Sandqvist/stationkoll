@@ -421,9 +421,9 @@ const DailyPlanning = () => {
     
     setEmployeeStations(data?.map(d => d.station) || []);
 
-    // Hämta statistik för senaste 3 månaderna
+    // Hämta statistik för senaste 6 månaderna
     const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 6);
     
     const { data: historyData } = await supabase
       .from("work_history")
@@ -727,7 +727,7 @@ const DailyPlanning = () => {
             empId => !assignedEmployeeIds.has(empId)
           );
 
-          if (unassignedEmployees.length > 0) {
+         
             return (
               <Card className="p-4 bg-gradient-to-br from-accent/20 to-primary/20 backdrop-blur-md border border-accent/50 shadow-xl col-span-full">
                 <div className="flex items-center justify-between mb-3">
@@ -752,9 +752,8 @@ const DailyPlanning = () => {
                 </div>
               </Card>
             );
-          }
-          return null;
-        })()}
+        }
+        )()}
 
 {STATIONS.filter(station => !SUB_STATIONS[station]).map((station) => {
           const assigned = assignments[station] || [];
@@ -1010,7 +1009,7 @@ const DailyPlanning = () => {
             {Object.keys(stationStats).length > 0 && (
               <div className="pt-4 border-t">
                 <p className="text-xs text-muted-foreground">
-                  Statistik visar antal arbetspass de senaste 3 månaderna
+                  Statistik visar antal arbetspass de senaste 6 månaderna
                 </p>
               </div>
             )}
