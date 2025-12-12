@@ -73,6 +73,8 @@ const DailyPlanning = () => {
   const [employeeStations, setEmployeeStations] = useState<string[]>([]);
   const [stationStats, setStationStats] = useState<Record<string, number>>({});
   const [recentWork, setRecentWork] = useState<{station: string, work_date: string}[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -402,6 +404,78 @@ const DailyPlanning = () => {
   
     setDraggedEmployee(null);
     setDraggedFrom(null);
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!selectedDate) {
+      toast({
+        title: "Välj datum",
+        description: "Välj ett datum först"});
+      return;
+    }
+  
+    try {
+      setIsSaving(true);
+  
+      // Flatten assignments and FILTER OUT EMPTY POSITIONS
+      const assignmentsToSave = Object.entries(assignments).flatMap(
+        ([station, employeeIds]) =>
+          employeeIds
+            .map((empId, index) => ({
+              employee_id: empId,
+              station,
+              position_index: index,
+              assigned_date: selectedDate,
+            }))
+            .filter((assignment) => assignment.employee_id && assignment.employee_id !== "") // CRITICAL FIX
+      );
+  
+      const workHistoryToSave = assignmentsToSave.map((a) => ({
+        employee_id: a.employee_id,
+        station: a.station,
+        work_date: selectedDate,
+      }));
+  
+      // Delete existing assignments for this date
+      const { error: deleteError } = await supabase
+        .from("daily_assignments")
+        .delete()
+        .eq("assigned_date", selectedDate);
+  
+      if (deleteError) throw deleteError;
+  
+      // Insert new assignments (now without empty strings)
+      if (assignmentsToSave.length > 0) {
+        const { error: insertError } = await supabase
+          .from("daily_assignments")
+          .insert(assignmentsToSave);
+  
+        if (insertError) throw insertError;
+      }
+  
+      // Insert work history (now without empty strings)
+      if (workHistoryToSave.length > 0) {
+        const { error: historyError } = await supabase
+          .from("work_history")
+          .insert(workHistoryToSave);
+  
+        if (historyError) throw historyError;
+      }
+  
+      toast({
+        title: "Sparad!",
+        description: "Tilldelningar sparade!",
+      });
+    } catch (error) {
+      console.error("Save error:", error);
+      toast({
+        variant: "destructive",
+        title: "Fel",
+        description: "Kunde inte spara tilldelningar",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const filteredEmployees = employees.filter((emp) => {
