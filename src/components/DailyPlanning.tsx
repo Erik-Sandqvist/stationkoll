@@ -407,71 +407,130 @@ const DailyPlanning = () => {
   };
 
   const handleSaveAssignments = async () => {
-    if (!selectedDate) {
-      toast({
-        title: "Välj datum",
-        description: "Välj ett datum först"});
-      return;
-    }
+    const today = new Date().toISOString().split("T")[0];
   
     try {
       setIsSaving(true);
   
-      // Flatten assignments and FILTER OUT EMPTY POSITIONS
-      const assignmentsToSave = Object.entries(assignments).flatMap(
-        ([station, employeeIds]) =>
-          employeeIds
-            .map((empId, index) => ({
-              employee_id: empId,
-              station,
-              position_index: index,
-              assigned_date: selectedDate,
-            }))
-            .filter((assignment) => assignment.employee_id && assignment.employee_id !== "") // CRITICAL FIX
-      );
-  
-      const workHistoryToSave = assignmentsToSave.map((a) => ({
-        employee_id: a.employee_id,
-        station: a.station,
-        work_date: selectedDate,
-      }));
-  
-      // Delete existing assignments for this date
+      const isUUID = (v: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+
+      // Bygg upp assignments med korrekt position_index
+      const assignmentsToSave: any[] = [];
+      const workHistoryToSave: any[] = [];
+
+      console.log("=== DEBUG: Alla assignments ===");
+      console.log(assignments);
+
+      Object.entries(assignments).forEach(([station, employeeIds]) => {
+        console.log(`Station: ${station}, employeeIds:`, employeeIds);
+        
+        // Skippa FL station eftersom den är manuell text, inte employee_id
+        if (station === "FL") {
+          console.log("Skippar FL station");
+          return;
+        }
+        
+        if (!employeeIds || employeeIds.length === 0) {
+          console.log(`Skippar ${station} - inga employees`);
+          return;
+        }
+
+        employeeIds.forEach((empId, index) => {
+          console.log(`  Checking empId: "${empId}" (type: ${typeof empId})`);
+          
+          // Skippa tomma strängar eller null/undefined
+          if (!empId || typeof empId !== 'string' || empId.trim() === '') {
+            console.log(`  Skippar tom empId på index ${index}`);
+            return;
+          }
+
+          const trimmedId = empId.trim();
+          
+          // Validera UUID
+          if (!isUUID(trimmedId)) {
+            console.warn(`Ogiltig employee_id: "${trimmedId}" på station ${station}`);
+            return;
+          }
+
+          console.log(`  ✓ Lägger till ${trimmedId} på ${station}`);
+          
+          assignmentsToSave.push({
+            employee_id: trimmedId,
+            station,
+            position_index: index,
+            assigned_date: today,
+          });
+
+          workHistoryToSave.push({
+            employee_id: trimmedId,
+            station,
+            work_date: today,
+          });
+        });
+      });
+
+      console.log("=== Data att spara ===");
+      console.log("assignmentsToSave:", assignmentsToSave);
+      console.log("workHistoryToSave:", workHistoryToSave);
+
+      if (assignmentsToSave.length === 0) {
+        toast({
+          title: "Inget att spara",
+          description: "Inga tilldelningar att spara",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log("Sparar", assignmentsToSave.length, "tilldelningar för idag");
+
+      // Ta bort befintliga för idag
       const { error: deleteError } = await supabase
         .from("daily_assignments")
         .delete()
-        .eq("assigned_date", selectedDate);
-  
-      if (deleteError) throw deleteError;
-  
-      // Insert new assignments (now without empty strings)
-      if (assignmentsToSave.length > 0) {
-        const { error: insertError } = await supabase
-          .from("daily_assignments")
-          .insert(assignmentsToSave);
-  
-        if (insertError) throw insertError;
+        .eq("assigned_date", today);
+
+      if (deleteError) {
+        console.error("Delete error:", deleteError);
+        throw deleteError;
       }
-  
-      // Insert work history (now without empty strings)
-      if (workHistoryToSave.length > 0) {
-        const { error: historyError } = await supabase
-          .from("work_history")
-          .insert(workHistoryToSave);
-  
-        if (historyError) throw historyError;
+
+      // Spara nya tilldelningar
+      const { error: insertDailyError } = await supabase
+        .from("daily_assignments")
+        .insert(assignmentsToSave);
+
+      if (insertDailyError) {
+        console.error("daily_assignments insert error:", insertDailyError);
+        throw insertDailyError;
+      }
+
+      // Spara work history
+      const { error: insertHistoryError } = await supabase
+        .from("work_history")
+        .insert(workHistoryToSave);
+
+      if (insertHistoryError) {
+        console.error("work_history insert error:", insertHistoryError);
+        throw insertHistoryError;
       }
   
       toast({
-        title: "Sparad!",
-        description: "Tilldelningar sparade!",
+        title: "Sparat!",
+        description: `${assignmentsToSave.length} tilldelningar sparade för idag`,
       });
-    } catch (error) {
-      console.error("Save error:", error);
+    } catch (err: any) {
+      console.error("Save failed:", err);
+    
+      const message = err?.message || "Okänt fel vid sparning";
+      const details = err?.details || "";
+      const hint = err?.hint || "";
+    
       toast({
         variant: "destructive",
-        title: "Fel",
-        description: "Kunde inte spara tilldelningar",
+        title: "Kunde inte spara",
+        description: `${message}${details ? ` – ${details}` : ""}${hint ? ` (${hint})` : ""}`,
       });
     } finally {
       setIsSaving(false);
