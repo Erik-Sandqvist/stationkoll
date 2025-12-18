@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { StationCard } from "@/components/StationCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -990,148 +991,29 @@ const DailyPlanning = () => {
         )()}
 
 {STATIONS.filter(station => !SUB_STATIONS[station]).map((station) => {
-          const assigned = assignments[station] || [];
-          const needed = stationNeeds[station] || 0;
-          const filledCount = station === "Pack" || station === "Auto Pack" || station === "Auto Plock" 
-            ? assigned.filter(a => a).length 
-            : assigned.length;
-          
-          // Hitta understationer för denna station
-          const subStations = Object.entries(SUB_STATIONS)
-            .filter(([_, parent]) => parent === station)
-            .map(([sub]) => sub);
+  const assigned = assignments[station] || [];
+  const needed = stationNeeds[station] || 0;
+  const subStations = Object.entries(SUB_STATIONS)
+    .filter(([_, parent]) => parent === station)
+    .map(([sub]) => sub);
 
-          return (
-            <Card
-              key={station}
-              className="p-4 bg-white backdrop-blur-md border border-white/50 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
-              onDragOver={handleDragOver}
-              onDrop={() => handleDrop(station)}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-black">
-                  {station}
-                </h3>
-                {station !== "FL" && (
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                    filledCount >= needed 
-                      ? 'bg-black/60 text-white' 
-                      : 'bg-black/60 text-red-300'
-                  }`}>
-                    {filledCount}/{needed}
-                  </span>
-                )}
-              </div>
-              {station === "Pack" ? (
-  <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto">
-    {Array.from({ length: 12 }, (_, idx) => (
-      <div
-        key={idx}
-        draggable={!!assigned[idx]}
-        onDragStart={() => assigned[idx] && handleDragStart(assigned[idx], station)}
-        onDragOver={handleDragOver}
-        onDrop={(e) => {
-          e.stopPropagation();
-          handleDropOnPackPosition(station, idx);
-        }}
-        className={`text-sm text-black p-2 rounded-lg ${
-          assigned[idx] 
-            ? 'bg-white cursor-move hover:bg-primary/25 backdrop-blur-sm' 
-            : 'backdrop-blur-sm'
-        } transition-all duration-200`}
-      >
-        {idx + 1}. {assigned[idx] ? getEmployeeShortName(assigned[idx]) : '–'}
-      </div>
-    ))}
-  </div>
-) : station === "Auto Pack" || station === "Auto Plock" ? (
-  <div className="space-y-2 max-h-72 overflow-y-auto">
-    {Array.from({ length: 6 }, (_, idx) => (
-      <div
-        key={idx}
-        draggable={!!assigned[idx]}
-        onDragStart={() => assigned[idx] && handleDragStart(assigned[idx], station)}
-        onDragOver={handleDragOver}
-        onDrop={(e) => {
-          e.stopPropagation();
-          handleDropOnPackPosition(station, idx);
-        }}
-        className={`text-sm text-black p-2 rounded-lg ${
-          assigned[idx] 
-            ? 'bg-white cursor-move hover:bg-primary/25 backdrop-blur-sm' 
-            : 'backdrop-blur-sm'
-        } transition-all duration-200`}
-      >
-        {idx + 1}. {assigned[idx] ? getEmployeeShortName(assigned[idx]) : '–'}
-      </div>
-    ))}
-  </div>
-) : (
-  <div className="space-y-2 max-h-72 overflow-y-auto">
-    {assigned.map((empId, idx) => (
-      <div
-        key={idx}
-        draggable
-        onDragStart={() => handleDragStart(empId, station)}
-        className="text-sm text-black cursor-move p-2 rounded-lg bg-white hover:bg-primary/25 backdrop-blur-sm transition-all duration-200"
-      >
-        • {getEmployeeShortName(empId)}
-      </div>
-    ))}
-  </div>
-)}
-
- {/* Rendera understationer */}
- {subStations.map((subStation) => {
-                const subAssigned = assignments[subStation] || [];
-                const subNeeded = stationNeeds[subStation] || 0;
-                
-                return (
-                  <div
-                    key={subStation}
-                    className="mt-4 pt-3 border-t border-gray-200"
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => {
-                      e.stopPropagation();
-                      handleDrop(subStation);
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-sm text-black/80">
-                        {subStation}
-                      </h4>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        subAssigned.length >= subNeeded 
-                          ? 'bg-black/60 text-white' 
-                          : 'bg-black/60 text-red-300'
-                      }`}>
-                        {subAssigned.length}/{subNeeded}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      {subAssigned.length > 0 ? (
-                        subAssigned.map((empId, idx) => (
-                          <div
-                            key={idx}
-                            draggable
-                            onDragStart={() => handleDragStart(empId, subStation)}
-                            className="text-sm text-black cursor-move p-2 rounded-lg bg-gray-50 hover:bg-primary/25 backdrop-blur-sm transition-all duration-200"
-                          >
-                            • {getEmployeeShortName(empId)}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-gray-400 p-2">
-                          Dra hit för att tilldela
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </Card>
-          );
-        })}
+  return (
+    <StationCard
+      key={station}
+      station={station}
+      assigned={assigned}
+      needed={needed}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      onDragStart={handleDragStart}
+      onDropOnPackPosition={handleDropOnPackPosition}
+      getEmployeeShortName={getEmployeeShortName}
+      subStations={subStations}
+      assignments={assignments}
+      stationNeeds={stationNeeds}
+    />
+  );
+})}
       </div>
       {Object.keys(assignments).length > 0 && (
         <div className="flex justify-center gap-4 mt-4">
