@@ -33,7 +33,7 @@ export const StationCard = ({
 
   return (
     <Card
-      className="p-4 bg-white backdrop-blur-md border border-white/50 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+      className="p-4 bg-white backdrop-blur-md border border-black/20 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
       onDragOver={onDragOver}
       onDrop={() => onDrop(station)}
     >
@@ -221,13 +221,13 @@ const SubStationSection = ({
 
   return (
     <div
-      className="p-2 bg-white rounded-lg border border-gray-200"
+      className="p-2 bg-white rounded-lg border-top border-black shadow hover:shadow-md transition-all duration-200"
       onDragOver={onDragOver}
       onDrop={() => onDrop(subStation)}
     >
       <div className="flex items-center justify-between mb-2">
         <h4 className="font-semibold text-black">{subStation}</h4>
-        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${          
+        <span className={`text-xs px-2.5 py-1 rounded-full ${          
             filledCount >= needed
               ? 'bg-black/60 text-white'
               : 'bg-black/60 text-red-300'
@@ -241,7 +241,7 @@ const SubStationSection = ({
             key={idx}
             draggable
             onDragStart={() => onDragStart(empId, subStation)}
-            className="text-xs text-gray-800 p-2 rounded bg-white cursor-move hover:bg-primary/10 transition-all duration-200"
+            className="text-sm text-black p-2 rounded bg-white cursor-move hover:bg-primary/10 transition-all duration-200"
           >
             {getEmployeeShortName(empId)}
           </div>
