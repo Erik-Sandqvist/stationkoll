@@ -5,6 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +66,7 @@ const DailyPlanning = () => {
   const [draggedFrom, setDraggedFrom] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [shiftFilter, setShiftFilter] = useState<string>("Alla");
+  const [flPopoverOpen, setFlPopoverOpen] = useState(false);
   const [warningDialog, setWarningDialog] = useState<{
     show: boolean;
     employeeName: string;
@@ -881,15 +886,51 @@ const DailyPlanning = () => {
     ))}
   </div>
   <div className="space-y-2 pt-4 border-t">
-            <Label htmlFor="fl-manual">FL Station (Manuell tilldelning)</Label>
-            <Input
-              id="fl-manual"
-              placeholder="Skriv namn för FL station..."
-              value={flManual}
-              onChange={(e) => setFlManual(e.target.value)}
-              className="bg-sidebar-input"
-            />
-          </div>
+  <Label htmlFor="fl-manual">FL Station</Label>
+  <Popover open={flPopoverOpen} onOpenChange={setFlPopoverOpen}>
+    <PopoverTrigger asChild>
+      <Button
+        variant="outline"
+        role="combobox"
+        aria-expanded={flPopoverOpen}
+        className="w-full justify-between bg-sidebar-input"
+      >
+        {flManual
+          ? employees.find((e) => e.id === flManual)?.name || "Välj medarbetare..."
+          : "Välj medarbetare..."}
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent className="w-full p-0">
+      <Command>
+        <CommandInput placeholder="Sök medarbetare..." />
+        <CommandList>
+          <CommandEmpty>Ingen medarbetare hittades.</CommandEmpty>
+          <CommandGroup>
+            {employees.map((employee) => (
+              <CommandItem
+                key={employee.id}
+                value={employee.name}
+                onSelect={() => {
+                  setFlManual(employee.id);
+                  setFlPopoverOpen(false);
+                }}
+              >
+                <Check
+                  className={cn(
+                    "mr-2 h-4 w-4",
+                    flManual === employee.id ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                {employee.name}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </PopoverContent>
+  </Popover>
+</div>
 
           <Button
             onClick={distributeEmployees}

@@ -255,7 +255,12 @@ const EmployeeManagement = () => {
             </Button>
           </div>
         </div>
-
+        <div className="border flex-col"><p>Här kan man kanske ha möjliget att kolla på de olika grupperna (Förslag)</p>
+        <div className="border h-8 flex items-center pl-8">GruppNamn1 v</div>
+        <div className="border h-8 flex items-center pl-8">GruppNamn2 v</div>
+        <div className="border h-8 flex items-center pl-8">GruppNamn3 v</div>
+        <div className="border h-8 flex items-center pl-8">GruppNamn4 v</div>
+        </div>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-foreground">
