@@ -163,7 +163,7 @@ const Dashboard = () => {
         </CardContent>
       </Card>
       <div className="m-4">
-        <p>Version 1.1.1</p>
+        <p>Version 1.1.3</p>
         <p>Applicationen är under utveckling och kan innehålla buggar. Vid frågor och support, kontakta Erik Sandqvist.</p>
         <a className="underline" href="mailto:esandqvist04@gmail.com">esandqvist04@gmail.com</a>
       </div>
