@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StationCard } from "@/components/StationCard";
+import { EmployeeDetailsDialog } from "@/components/EmployeeDetailsDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -1058,86 +1059,15 @@ const DailyPlanning = () => {
       </AlertDialog>
 
       {/* Dialog för medarbetarinformation */}
-      <Dialog open={!!selectedEmployee} onOpenChange={() => setSelectedEmployee(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              {selectedEmployee?.name}
-            </DialogTitle>
-            <DialogDescription>
-              Välj vilka stationer {selectedEmployee?.name} kan arbeta på
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Skift</Label>
-              <Badge variant="outline" className="text-sm">
-                {selectedEmployee?.shift}
-              </Badge>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Stationer</Label>
-              <div className="grid gap-3">
-                {STATIONS.map((station) => (
-                  <div key={station} className="flex items-center justify-between space-x-3">
-                    <div className="flex items-center space-x-3">
-                      <Checkbox
-                        id={`employee-station-${station}`}
-                        checked={employeeStations.includes(station)}
-                        onCheckedChange={() => toggleStation(station)}
-                      />
-                      <label
-                        htmlFor={`employee-station-${station}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        {station}
-                      </label>
-                    </div>
-                    {stationStats[station] && (
-                      <Badge variant="secondary" className="text-xs">
-                        {stationStats[station]} gånger
-                      </Badge>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {recentWork.length > 0 && (
-              <div className="space-y-2 pt-4 border-t">
-                <Label className="text-sm font-medium">Senaste 5 stationerna</Label>
-                <div className="space-y-2">
-                  {recentWork.map((work, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-secondary/30">
-                      <span className="text-sm font-medium">{work.station}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(work.work_date).toLocaleDateString('sv-SE')}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {Object.keys(stationStats).length > 0 && (
-              <div className="pt-4 border-t">
-                <p className="text-xs text-muted-foreground">
-                  Statistik visar antal arbetspass de senaste 6 månaderna
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end">
-            <Button onClick={() => setSelectedEmployee(null)}>
-              Stäng
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <EmployeeDetailsDialog
+  employee={selectedEmployee}
+  onOpenChange={(open) => !open && setSelectedEmployee(null)}
+  employeeStations={employeeStations}
+  stationStats={stationStats}
+  recentWork={recentWork}
+  stations={STATIONS}
+  onToggleStation={toggleStation}
+/>
     </div>
   );
 };
