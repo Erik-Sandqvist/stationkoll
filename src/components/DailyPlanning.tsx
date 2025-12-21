@@ -33,6 +33,7 @@ interface Employee {
   id: string;
   name: string;
   shift: string;
+  is_active: boolean;
 }
 
 interface StationNeed {
@@ -95,7 +96,7 @@ const DailyPlanning = () => {
   const fetchEmployees = async () => {
     const { data } = await supabase
       .from("employees")
-      .select("id, name, shift")
+      .select("id, name, shift, is_active")
       .eq("is_active", true)
       .order("name");
 
@@ -872,7 +873,7 @@ const DailyPlanning = () => {
       </Button>
     </PopoverTrigger>
     <PopoverContent className="w-full p-0">
-      <Command>
+      <Command className="w-96">
         <CommandInput placeholder="Sök medarbetare..." />
         <CommandList>
           <CommandEmpty>Ingen medarbetare hittades.</CommandEmpty>

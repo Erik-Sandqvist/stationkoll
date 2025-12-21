@@ -9,6 +9,7 @@ interface Employee {
   id: string;
   name: string;
   shift: string;
+  is_active?: boolean;
 }
 
 interface RecentWork {
@@ -43,15 +44,20 @@ export const EmployeeDetailsDialog = ({
             <Settings className="h-5 w-5" />
             {employee?.name}
           </DialogTitle>
-          <DialogDescription>
-            Välj vilka stationer {employee?.name} kan arbeta på
-          </DialogDescription>
+          <div className="space-y-2">
+          <Label className="text-sm font-medium">Status</Label>
+       <Badge 
+        variant="outline" 
+        className={`text-sm ml-2 ${Boolean(employee?.is_active) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+        {Boolean(employee?.is_active) ? 'Aktiv' : 'Inaktiv'}
+       </Badge>
+          </div>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label className="text-sm font-medium">Skift</Label>
-            <Badge variant="outline" className="text-sm">
+            <Badge variant="outline" className="text-sm ml-2">
               {employee?.shift}
             </Badge>
           </div>

@@ -223,7 +223,10 @@ const SubStationSection = ({
     <div
       className="p-2 bg-white rounded-lg border-top border-black shadow hover:shadow-md transition-all duration-200"
       onDragOver={onDragOver}
-      onDrop={() => onDrop(subStation)}
+      onDrop={(e) => {
+        e.stopPropagation(); 
+        onDrop(subStation);
+      }}
     >
       <div className="flex items-center justify-between mb-2">
         <h4 className="font-semibold text-black">{subStation}</h4>
