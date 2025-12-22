@@ -158,7 +158,7 @@ const EmployeeManagement = () => {
       });
     }
   };
-  
+
   const toggleStation = async (station: string) => {
     if (!selectedEmployee) return;
 
@@ -261,7 +261,7 @@ const EmployeeManagement = () => {
             <Button
               onClick={addEmployee}
               disabled={loading}
-              className="gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
+              className="gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-80 transition-opacity"
             >
               <Plus className="h-4 w-4" />
               Lägg till
@@ -270,8 +270,8 @@ const EmployeeManagement = () => {
         </div>
         <div className="border flex-col"><p>Här kan man kanske ha möjliget att kolla på de olika grupperna (Förslag)</p>
         <div className="border h-8 flex items-center pl-8">GruppNamn1 v</div>
-        <div className="border h-8 flex items-center pl-8">GruppNamn2 v</div>
-        <div className="border h-8 flex items-center pl-8">GruppNamn3 v</div>
+        <div className="border h-8 flex items-center pl-8">Ängland v</div>
+        <div className="border h-8 flex items-center pl-8">Solvinden v</div>
         <div className="border h-8 flex items-center pl-8">GruppNamn4 v</div>
         </div>
         <div className="space-y-4">
