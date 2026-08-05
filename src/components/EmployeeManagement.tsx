@@ -9,18 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, UserCheck, UserX, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-
-const STATIONS = [
-  "Plock",
-  "Auto Plock",
-  "Pack",
-  "Auto Pack",
-  "KM",
-  "Decating",
-  "In/Ut",
-  "Rep",
-  "FL",
-];
+import { useStations } from "@/hooks/useStations";
+import { ALL_SHIFTS, DEFAULT_SHIFT, SHIFTS } from "@/config/shifts";
+import { monthsBefore, todayKey } from "@/utils/date";
 
 interface Employee {
   id: string;
@@ -31,10 +22,11 @@ interface Employee {
 }
 
 const EmployeeManagement = () => {
+  const { stationNames } = useStations();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [newEmployeeName, setNewEmployeeName] = useState("");
-  const [newEmployeeShift, setNewEmployeeShift] = useState("Skift 1");
-  const [filterShift, setFilterShift] = useState("Alla");
+  const [newEmployeeShift, setNewEmployeeShift] = useState<string>(DEFAULT_SHIFT);
+  const [filterShift, setFilterShift] = useState<string>(ALL_SHIFTS);
   const [loading, setLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [recentWork, setRecentWork] = useState<{station: string, work_date: string}[]>([]);
@@ -90,7 +82,7 @@ const EmployeeManagement = () => {
         description: `${newEmployeeName} har lagts till`,
       });
       setNewEmployeeName("");
-      setNewEmployeeShift("Skift 1");
+      setNewEmployeeShift(DEFAULT_SHIFT);
       fetchEmployees();
     }
     setLoading(false);
@@ -130,14 +122,11 @@ const EmployeeManagement = () => {
       setEmployeeStations(stationsData?.map(d => d.station) || []);
   
       // Hämta statistik för senaste 6 månaderna
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      
       const { data: historyData } = await supabase
         .from("work_history")
         .select("station, work_date")
         .eq("employee_id", employee.id)
-        .gte("work_date", sixMonthsAgo.toISOString().split('T')[0])
+        .gte("work_date", monthsBefore(todayKey(), 6))
         .order('work_date', { ascending: false });
       
       // Räkna antal gånger per station
@@ -250,10 +239,11 @@ const EmployeeManagement = () => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="">
-                <SelectItem value="Skift 1">Skift 1</SelectItem>
-                <SelectItem value="Skift 2">Skift 2</SelectItem>
-                <SelectItem value="Natt">Natt</SelectItem>
-                <SelectItem value="Bemanningsföretag">Bemanningsföretag</SelectItem>
+                {SHIFTS.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -277,7 +267,7 @@ const EmployeeManagement = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-foreground">
-              Medarbetare ({filterShift === "Alla" ? employees.length : employees.filter(e => e.shift === filterShift).length})
+              Medarbetare ({filterShift === ALL_SHIFTS ? employees.length : employees.filter(e => e.shift === filterShift).length})
             </h3>
             <div className="w-48">
               <Select value={filterShift} onValueChange={setFilterShift}>
@@ -285,24 +275,25 @@ const EmployeeManagement = () => {
                   <SelectValue placeholder="Välj skift" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Alla">Alla skift</SelectItem>
-                  <SelectItem value="Skift 1">Skift 1</SelectItem>
-                  <SelectItem value="Skift 2">Skift 2</SelectItem>
-                  <SelectItem value="Natt">Natt</SelectItem>
-                  <SelectItem value="Bemanningsföretag">Bemanningsföretag</SelectItem>
+                  <SelectItem value={ALL_SHIFTS}>Alla skift</SelectItem>
+                  {SHIFTS.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="grid gap-2">
-            {(filterShift === "Alla" ? employees : employees.filter(e => e.shift === filterShift)).length === 0 ? (
+            {(filterShift === ALL_SHIFTS ? employees : employees.filter(e => e.shift === filterShift)).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                {filterShift === "Alla" 
+                {filterShift === ALL_SHIFTS 
                   ? "Inga medarbetare än. Lägg till din första medarbetare ovan."
                   : `Inga medarbetare i ${filterShift}.`}
               </p>
             ) : (
-              (filterShift === "Alla" ? employees : employees.filter(e => e.shift === filterShift)).map((employee) => (
+              (filterShift === ALL_SHIFTS ? employees : employees.filter(e => e.shift === filterShift)).map((employee) => (
                 <Card
                   key={employee.id}
                   className="p-4 flex items-center justify-between hover:shadow-md transition-shadow"
@@ -368,7 +359,7 @@ const EmployeeManagement = () => {
   employeeStations={employeeStations}
   stationStats={stationStats}
   recentWork={recentWork}
-  stations={STATIONS}
+  stations={stationNames}
   onToggleStation={toggleStation}
 />
     </Card>

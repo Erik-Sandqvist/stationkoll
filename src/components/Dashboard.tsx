@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Users, Calendar, TrendingUp, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { todayKey } from "@/utils/date";
 
 interface Stats {
   totalEmployees: number;
@@ -24,7 +25,7 @@ const Dashboard = () => {
   }, []);
 
   const fetchStats = async () => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayKey();
 
     // Get employee counts
     const { data: allEmployees } = await supabase

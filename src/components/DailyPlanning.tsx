@@ -26,8 +26,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Users, Shuffle, Search, Info, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
-import { getEmployeesLastStations, canAssignToStation } from "@/utils/stationRotation";
+import { getEmployeesLastStations } from "@/utils/stationRotation";
+import { distributeEmployees, type DistributableEmployee } from "@/utils/distribution";
+import { useStations } from "@/hooks/useStations";
+import { PlanningHeader } from "@/components/PlanningHeader";
+import { StationsMissingNotice } from "@/components/StationsMissingNotice";
+import { monthsBefore, todayKey } from "@/utils/date";
+import { ALL_SHIFTS, DEFAULT_SHIFT, SHIFTS, type Shift } from "@/config/shifts";
 
 interface Employee {
   id: string;
@@ -41,25 +48,19 @@ interface StationNeed {
   count: number;
 }
 
-const STATIONS = [
-  "Plock",
-  "Auto Plock",
-  "Pack",
-  "Auto Pack",
-  "KM",
-  "Decating",
-  "Rework",
-  "In/Ut",
-  "Rep",
-  "FL",
-];
-
-// Stationer som ska visas som del av en annan station
-const SUB_STATIONS: Record<string, string> = {
-  "Rework": "Decating", // Rework visas under Decanting
-};
-
 const DailyPlanning = () => {
+  const {
+    stationNames,
+    topLevelStationNames,
+    getSubStationNames,
+    getSlots: getStationSlots,
+    getLayout,
+    autoAssignedStationNames,
+    manualStationName,
+    loading: stationsLoading,
+    error: stationsError,
+    isEmpty: noStations,
+  } = useStations();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [stationNeeds, setStationNeeds] = useState<Record<string, number>>({});
@@ -70,7 +71,9 @@ const DailyPlanning = () => {
   const [draggedEmployee, setDraggedEmployee] = useState<{ id: string; fromStation: string } | null>(null);
   const [draggedFrom, setDraggedFrom] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [shiftFilter, setShiftFilter] = useState<string>("Alla");
+  // Vilka medarbetare som visas i urvalslistan. Följer planeringsskiftet, men
+  // kan sättas till "Alla" för att hämta in folk från ett annat skift.
+  const [shiftFilter, setShiftFilter] = useState<string>(DEFAULT_SHIFT);
   const [flPopoverOpen, setFlPopoverOpen] = useState(false);
   const [warningDialog, setWarningDialog] = useState<{
     show: boolean;
@@ -83,15 +86,30 @@ const DailyPlanning = () => {
   const [employeeStations, setEmployeeStations] = useState<string[]>([]);
   const [stationStats, setStationStats] = useState<Record<string, number>>({});
   const [recentWork, setRecentWork] = useState<{station: string, work_date: string}[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  // Allt på sidan gäller det valda datumet och skiftet, inte nödvändigtvis idag
+  const [selectedDate, setSelectedDate] = useState<string>(todayKey());
+  const [planningShift, setPlanningShift] = useState<Shift>(DEFAULT_SHIFT);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchEmployees();
-    loadTodayNeeds();
-    loadTodayAssignments();
   }, []);
+
+  // Läses om när datumet byts. Måste ske efter att stationerna hämtats:
+  // platslayouten avgör var varje medarbetare hamnar, och den kommer från
+  // stations-tabellen.
+  useEffect(() => {
+    if (stationsLoading) return;
+    loadNeeds();
+    loadAssignments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stationsLoading, selectedDate, planningShift]);
+
+  // Byter man planeringsskift är det rimligast att se det skiftets medarbetare
+  useEffect(() => {
+    setShiftFilter(planningShift);
+    setSelectedEmployees([]);
+  }, [planningShift]);
 
   const fetchEmployees = async () => {
     const { data } = await supabase
@@ -103,58 +121,78 @@ const DailyPlanning = () => {
     setEmployees(data || []);
   };
 
-  const loadTodayNeeds = async () => {
-    const today = new Date().toISOString().split("T")[0];
+  const loadNeeds = async () => {
     const { data } = await supabase
       .from("station_needs")
       .select("station, needed_count")
-      .eq("need_date", today);
+      .eq("need_date", selectedDate)
+      .eq("shift", planningShift);
 
-    if (data) {
-      const needsMap: Record<string, number> = {};
-      data.forEach((item) => {
-        needsMap[item.station] = item.needed_count;
-      });
-      setStationNeeds(needsMap);
-    }
+    // Nollställ alltid, annars ligger föregående datums behov kvar
+    const needsMap: Record<string, number> = {};
+    data?.forEach((item) => {
+      needsMap[item.station] = item.needed_count;
+    });
+    setStationNeeds(needsMap);
+    setHasUnsavedNeeds(false);
   };
 
-  const loadTodayAssignments = async () => {
-    const today = new Date().toISOString().split("T")[0];
+  const loadAssignments = async () => {
     const { data } = await supabase
       .from("daily_assignments")
-      .select("employee_id, station, employees(name)")
-      .eq("assigned_date", today);
+      .select("employee_id, station, lane")
+      .eq("assigned_date", selectedDate)
+      .eq("shift", planningShift)
+      .order("lane", { ascending: true, nullsFirst: false });
 
-    if (data) {
-      const assignmentsMap: Record<string, string[]> = {};
-      data.forEach((item: any) => {
-        if (!assignmentsMap[item.station]) {
-          assignmentsMap[item.station] = [];
-        }
-        assignmentsMap[item.station].push(item.employees.name);
-      });
-      setAssignments(assignmentsMap);
-    }
+    // Nollställ alltid, annars ligger föregående datums tilldelningar kvar
+    const assignmentsMap: Record<string, string[]> = {};
+
+    data?.forEach((item) => {
+      const slots = getStationSlots(item.station);
+
+      if (slots === null) {
+        // Listlayout: ordningen räcker
+        if (!assignmentsMap[item.station]) assignmentsMap[item.station] = [];
+        assignmentsMap[item.station].push(item.employee_id);
+        return;
+      }
+
+      // Numrerade platser: lägg tillbaka på samma plats som vid sparning
+      if (!assignmentsMap[item.station]) {
+        assignmentsMap[item.station] = Array(slots).fill("");
+      }
+      const target =
+        item.lane !== null && item.lane >= 0 && item.lane < slots
+          ? item.lane
+          : assignmentsMap[item.station].findIndex((id) => !id);
+
+      if (target !== -1) {
+        assignmentsMap[item.station][target] = item.employee_id;
+      }
+    });
+
+    setAssignments(assignmentsMap);
   };
 
   const saveStationNeeds = async () => {
-    const today = new Date().toISOString().split("T")[0];
     setLoading(true);
 
-    for (const station of STATIONS) {
+    for (const station of stationNames) {
       const count = stationNeeds[station] || 0;
       await supabase.from("station_needs").upsert(
         {
           station,
           needed_count: count,
-          need_date: today,
+          need_date: selectedDate,
+          shift: planningShift,
         },
-        { onConflict: "station,need_date" }
+        { onConflict: "station,need_date,shift" }
       );
     }
 
     setLoading(false);
+    setHasUnsavedNeeds(false);
     toast({
       title: "Sparat!",
       description: "Personalbehovet har sparats",
@@ -162,14 +200,13 @@ const DailyPlanning = () => {
   };
 
   const getEmployeeHistory = async (employeeId: string) => {
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
+    // Historiken räknas bakåt från det datum som planeras, inte från idag
     const { data } = await supabase
       .from("work_history")
       .select("station")
       .eq("employee_id", employeeId)
-      .gte("work_date", sixMonthsAgo.toISOString().split("T")[0]);
+      .gte("work_date", monthsBefore(selectedDate, 6))
+      .lt("work_date", selectedDate);
 
     const stationCount: Record<string, number> = {};
     data?.forEach((item) => {
@@ -203,7 +240,7 @@ const DailyPlanning = () => {
     return competenciesMap;
   };
 
-  const distributeEmployees = async () => {
+  const handleDistribute = async () => {
     if (selectedEmployees.length === 0) {
       toast({
         title: "Ingen vald",
@@ -215,14 +252,11 @@ const DailyPlanning = () => {
 
     setLoading(true);
 
-    // Get last assigned station for each employee
+    // Hämta underlaget: senaste station, kompetenser och historik per medarbetare
     const lastStationsMap = await getEmployeesLastStations(selectedEmployees);
-    
-    // Get employee competencies (which stations they can work at)
     const competenciesMap = await getEmployeeCompetencies(selectedEmployees);
 
-    // Get history for all selected employees (for 6-month rotation logic)
-    const employeeHistories = await Promise.all(
+    const employees: DistributableEmployee[] = await Promise.all(
       selectedEmployees.map(async (empId) => ({
         id: empId,
         history: await getEmployeeHistory(empId),
@@ -231,133 +265,28 @@ const DailyPlanning = () => {
       }))
     );
 
-    const newAssignments: Record<string, string[]> = {};
-    const assignedEmployees = new Set<string>();
-    const stationsToFill = STATIONS.filter((s) => s !== "FL");
+    const { assignments: newAssignments, assignedIds, unassignedIds } =
+      distributeEmployees({
+        employees,
+        stations: autoAssignedStationNames,
+        stationNeeds,
+      });
 
-    // Get stations that need employees
-    const stationsWithNeeds = stationsToFill.filter((station) => (stationNeeds[station] || 0) > 0);
-
-    // Initialize assignments
-    stationsWithNeeds.forEach(station => {
-      newAssignments[station] = [];
-    });
-
-    // Smart distribution algorithm:
-    // 1. Prioritize employees with FEWER competencies (less flexible = assign first)
-    // 2. Prioritize stations with FEWER available employees (critical stations first)
-    // This ensures we maximize total assignments
-    
-    const getAvailableEmployeesForStation = (station: string) => {
-      return employeeHistories.filter(emp => 
-        !assignedEmployees.has(emp.id) && 
-        emp.competencies.has(station)
-      );
-    };
-
-    const getRemainingNeed = (station: string) => {
-      return (stationNeeds[station] || 0) - (newAssignments[station]?.length || 0);
-    };
-
-    // Keep assigning until no more assignments can be made
-    let madeAssignment = true;
-    while (madeAssignment) {
-      madeAssignment = false;
-
-      // Sort stations by: fewest available employees first (critical stations)
-      const stationsByScarcity = stationsWithNeeds
-        .filter(station => getRemainingNeed(station) > 0)
-        .map(station => ({
-          station,
-          availableCount: getAvailableEmployeesForStation(station).length,
-          need: getRemainingNeed(station)
-        }))
-        .filter(s => s.availableCount > 0)
-        .sort((a, b) => a.availableCount - b.availableCount);
-
-      for (const { station } of stationsByScarcity) {
-        if (getRemainingNeed(station) <= 0) continue;
-
-        // Get available employees, sorted by:
-        // 1. Fewest competencies first (less flexible employees)
-        // 2. Not at this station last time (rotation rule)
-        // 3. Least times at this station (history)
-        const available = getAvailableEmployeesForStation(station)
-          .filter(emp => canAssignToStation(emp.id, station, lastStationsMap))
-          .sort((a, b) => {
-            // First: fewer competencies = higher priority
-            const compDiff = a.competencies.size - b.competencies.size;
-            if (compDiff !== 0) return compDiff;
-            // Then: least times at this station
-            const aCount = a.history[station] || 0;
-            const bCount = b.history[station] || 0;
-            return aCount - bCount;
-          });
-
-        if (available.length > 0) {
-          const employee = available[0];
-          newAssignments[station].push(employee.id);
-          assignedEmployees.add(employee.id);
-          madeAssignment = true;
-          break; // Re-evaluate station priorities after each assignment
-        }
-      }
-    }
-
-    // Second pass: try to fill remaining needs ignoring last-station rule
-    madeAssignment = true;
-    while (madeAssignment) {
-      madeAssignment = false;
-
-      const stationsByScarcity = stationsWithNeeds
-        .filter(station => getRemainingNeed(station) > 0)
-        .map(station => ({
-          station,
-          availableCount: getAvailableEmployeesForStation(station).length,
-        }))
-        .filter(s => s.availableCount > 0)
-        .sort((a, b) => a.availableCount - b.availableCount);
-
-      for (const { station } of stationsByScarcity) {
-        if (getRemainingNeed(station) <= 0) continue;
-
-        // Ignore rotation rule in fallback
-        const available = getAvailableEmployeesForStation(station)
-          .sort((a, b) => {
-            const compDiff = a.competencies.size - b.competencies.size;
-            if (compDiff !== 0) return compDiff;
-            const aCount = a.history[station] || 0;
-            const bCount = b.history[station] || 0;
-            return aCount - bCount;
-          });
-
-        if (available.length > 0) {
-          const employee = available[0];
-          newAssignments[station].push(employee.id);
-          assignedEmployees.add(employee.id);
-          madeAssignment = true;
-          break;
-        }
-      }
-    }
-
-    // Handle FL manual assignment
-    if (flManual.trim()) {
-      newAssignments["FL"] = [flManual];
+    // Den manuellt bemannade stationen fördelas inte automatiskt
+    if (manualStationName && flManual.trim()) {
+      newAssignments[manualStationName] = [flManual];
     }
 
     setAssignments(newAssignments);
     setLoading(false);
 
-    // Count unassigned employees
-    const unassignedCount = selectedEmployees.length - assignedEmployees.size;
-    const unassignedMsg = unassignedCount > 0 
-      ? ` ${unassignedCount} medarbetare saknar kompetens för lediga stationer.`
+    const unassignedMsg = unassignedIds.length > 0
+      ? ` ${unassignedIds.length} medarbetare saknar kompetens för lediga stationer.`
       : "";
 
     toast({
       title: "Fördelning klar!",
-      description: `${assignedEmployees.size} medarbetare har tilldelats stationer.${unassignedMsg} Klicka på Spara för att spara till databasen.`,
+      description: `${assignedIds.size} medarbetare har tilldelats stationer.${unassignedMsg} Klicka på Spara för att spara till databasen.`,
     });
   };
 
@@ -480,7 +409,7 @@ const DailyPlanning = () => {
       }
   
       // Lägg till på ny plats
-      const maxPositions = station === "Pack" ? 12 : 6;
+      const maxPositions = getStationSlots(station) ?? 6;
       if (!updated[station]) {
         updated[station] = Array(maxPositions).fill("");
       }
@@ -500,116 +429,9 @@ const DailyPlanning = () => {
     setDraggedFrom(null);
   };
 
-  const handleSaveAssignments = async () => {
-    const today = new Date().toISOString().split("T")[0];
-  
-    try {
-      setIsSaving(true);
-  
-      const isUUID = (v: string) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-
-      // Bygg upp assignments med korrekt position_index
-      const assignmentsToSave: any[] = [];
-      const workHistoryToSave: any[] = [];
-
-      // Filtrera bort FL station helt innan vi börjar
-      const assignmentsWithoutFL = Object.entries(assignments).filter(([station]) => station !== "FL");
-
-      assignmentsWithoutFL.forEach(([station, employeeIds]) => {
-        if (!employeeIds || employeeIds.length === 0) return;
-
-        employeeIds.forEach((empId, index) => {
-          // Skippa tomma strängar eller null/undefined
-          if (!empId || typeof empId !== 'string' || empId.trim() === '') return;
-
-          const trimmedId = empId.trim();
-          
-          // Validera UUID
-          if (!isUUID(trimmedId)) {
-            console.warn(`Ogiltig employee_id: "${trimmedId}" på station ${station}`);
-            return;
-          }
-
-          assignmentsToSave.push({
-            employee_id: trimmedId,
-            station,
-            position_index: index,
-            assigned_date: today,
-          });
-
-          workHistoryToSave.push({
-            employee_id: trimmedId,
-            station,
-            work_date: today,
-          });
-        });
-      });
-
-      if (assignmentsToSave.length === 0) {
-        toast({
-          title: "Inget att spara",
-          description: "Inga tilldelningar att spara",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Ta bort befintliga för idag
-      const { error: deleteError } = await supabase
-        .from("daily_assignments")
-        .delete()
-        .eq("assigned_date", today);
-
-      if (deleteError) {
-        console.error("Delete error:", deleteError);
-        throw deleteError;
-      }
-
-      // Spara nya tilldelningar
-      const { error: insertDailyError } = await supabase
-        .from("daily_assignments")
-        .insert(assignmentsToSave);
-
-      if (insertDailyError) {
-        console.error("daily_assignments insert error:", insertDailyError);
-        throw insertDailyError;
-      }
-
-      // Spara work history
-      const { error: insertHistoryError } = await supabase
-        .from("work_history")
-        .insert(workHistoryToSave);
-
-      if (insertHistoryError) {
-        console.error("work_history insert error:", insertHistoryError);
-        throw insertHistoryError;
-      }
-  
-      toast({
-        title: "Sparat!",
-        description: `${assignmentsToSave.length} tilldelningar sparade för idag (FL exkluderad)`,
-      });
-    } catch (err: any) {
-      console.error("Save failed:", err);
-    
-      const message = err?.message || "Okänt fel vid sparning";
-      const details = err?.details || "";
-      const hint = err?.hint || "";
-    
-      toast({
-        variant: "destructive",
-        title: "Kunde inte spara",
-        description: `${message}${details ? ` – ${details}` : ""}${hint ? ` (${hint})` : ""}`,
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const filteredEmployees = employees.filter((emp) => {
     const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesShift = shiftFilter === "Alla" || emp.shift === shiftFilter;
+    const matchesShift = shiftFilter === ALL_SHIFTS || emp.shift === shiftFilter;
     return matchesSearch && matchesShift;
   });
 
@@ -625,14 +447,11 @@ const DailyPlanning = () => {
     setEmployeeStations(data?.map(d => d.station) || []);
 
     // Hämta statistik för senaste 6 månaderna
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 6);
-    
     const { data: historyData } = await supabase
       .from("work_history")
       .select("station")
       .eq("employee_id", employee.id)
-      .gte("work_date", threeMonthsAgo.toISOString().split('T')[0]);
+      .gte("work_date", monthsBefore(selectedDate, 6));
     
     // Räkna antal gånger per station
     const stats: Record<string, number> = {};
@@ -703,48 +522,96 @@ const DailyPlanning = () => {
   };
 
   const saveAllAssignments = async () => {
-    const today = new Date().toISOString().split("T")[0];
     setLoading(true);
 
     try {
-      // Ta bort alla befintliga tilldelningar för dagen
-      await supabase.from("daily_assignments").delete().eq("assigned_date", today);
-      await supabase.from("work_history").delete().eq("work_date", today);
+      const assignmentsToSave: TablesInsert<"daily_assignments">[] = [];
+      const historyToSave: TablesInsert<"work_history">[] = [];
 
-      // Spara alla nya tilldelningar
-      const assignmentsToSave: any[] = [];
-      const historyToSave: any[] = [];
+      // En medarbetare får bara ha en tilldelning per dag (unikt villkor i
+      // databasen). Den manuellt bemannade stationen hanteras först, så att ett
+      // handplockat val vinner över en automatisk placering om samma person
+      // hamnat på båda.
+      const stationOrder = Object.keys(assignments).sort((a, b) =>
+        a === manualStationName ? -1 : b === manualStationName ? 1 : 0
+      );
+      const placedAt = new Map<string, string>();
+      const duplicates: string[] = [];
 
-      Object.entries(assignments).forEach(([station, employeeIds]) => {
-        employeeIds.forEach((empId) => {
-          if (empId) { // Skippa tomma platser
-            assignmentsToSave.push({
-              employee_id: empId,
-              station,
-              assigned_date: today,
-            });
-            historyToSave.push({
-              employee_id: empId,
-              station,
-              work_date: today,
-            });
+      for (const station of stationOrder) {
+        (assignments[station] || []).forEach((empId, index) => {
+          if (!empId) return; // Skippa tomma platser
+
+          if (placedAt.has(empId)) {
+            duplicates.push(getEmployeeShortName(empId));
+            return;
           }
+          placedAt.set(empId, station);
+
+          assignmentsToSave.push({
+            employee_id: empId,
+            station,
+            assigned_date: selectedDate,
+            shift: planningShift,
+            lane: index,
+          });
+          historyToSave.push({
+            employee_id: empId,
+            station,
+            work_date: selectedDate,
+            shift: planningShift,
+            lane: index,
+          });
         });
-      });
+      }
+
+      // Ta bort befintliga tilldelningar för datumet och skiftet. Andra skift
+      // samma dag rörs inte.
+      const { error: deleteAssignmentsError } = await supabase
+        .from("daily_assignments")
+        .delete()
+        .eq("assigned_date", selectedDate)
+        .eq("shift", planningShift);
+      if (deleteAssignmentsError) throw deleteAssignmentsError;
+
+      const { error: deleteHistoryError } = await supabase
+        .from("work_history")
+        .delete()
+        .eq("work_date", selectedDate)
+        .eq("shift", planningShift);
+      if (deleteHistoryError) throw deleteHistoryError;
 
       if (assignmentsToSave.length > 0) {
-        await supabase.from("daily_assignments").insert(assignmentsToSave);
-        await supabase.from("work_history").insert(historyToSave);
+        const { error: insertAssignmentsError } = await supabase
+          .from("daily_assignments")
+          .insert(assignmentsToSave);
+        if (insertAssignmentsError) throw insertAssignmentsError;
+
+        const { error: insertHistoryError } = await supabase
+          .from("work_history")
+          .insert(historyToSave);
+        if (insertHistoryError) throw insertHistoryError;
       }
+
+      const duplicateMsg = duplicates.length > 0
+        ? ` ${duplicates.join(", ")} fanns på flera stationer och sparades bara en gång.`
+        : "";
 
       toast({
         title: "Sparat!",
-        description: `${assignmentsToSave.length} tilldelningar har sparats till databasen`,
+        description: `${assignmentsToSave.length} tilldelningar har sparats till databasen.${duplicateMsg}`,
       });
-    } catch (error) {
+    } catch (err) {
+      console.error("Kunde inte spara tilldelningarna:", err);
+
+      // Supabase-fel har message/details, men fångar även vanliga Error
+      const supabaseError = err as { message?: string; details?: string };
+      const message = supabaseError?.message || "Okänt fel vid sparning";
+      const details = supabaseError?.details ? ` – ${supabaseError.details}` : "";
+
       toast({
-        title: "Fel",
-        description: "Kunde inte spara tilldelningarna",
+        title: "Kunde inte spara",
+        description: `${message}${details}`,
         variant: "destructive",
       });
     } finally {
@@ -752,10 +619,22 @@ const DailyPlanning = () => {
     }
   };
 
+  if (noStations) {
+    return <StationsMissingNotice error={stationsError} />;
+  }
+
   return (
     <div className="space-y-6">
+      <PlanningHeader
+        date={selectedDate}
+        onDateChange={setSelectedDate}
+        shift={planningShift}
+        onShiftChange={setPlanningShift}
+      />
+
       <StationNeedsCard
-  stations={STATIONS}
+  stations={stationNames}
+  manualStationName={manualStationName}
   stationNeeds={stationNeeds}
   onUpdateNeed={(station, count) => {
     setStationNeeds({
@@ -766,16 +645,17 @@ const DailyPlanning = () => {
   }}
   onSave={saveStationNeeds}
   loading={loading}
+  hasUnsavedChanges={hasUnsavedNeeds}
 />
 
       <Card className="shadow-lg border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" />
-            Välj medarbetare för idag
+            Välj medarbetare
           </CardTitle>
           <CardDescription>
-            Välj vilka som arbetar idag innan du fördelar till stationer
+            Välj vilka som arbetar den valda dagen innan du fördelar till stationer
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -794,11 +674,12 @@ const DailyPlanning = () => {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="Alla">Alla skift</SelectItem>
-        <SelectItem value="Skift 1">Skift 1</SelectItem>
-        <SelectItem value="Skift 2">Skift 2</SelectItem>
-        <SelectItem value="Natt">Natt</SelectItem>
-        <SelectItem value="Bemanningsföretag">Bemaningsföretag</SelectItem>
+        <SelectItem value={ALL_SHIFTS}>Alla skift</SelectItem>
+        {SHIFTS.map((name) => (
+          <SelectItem key={name} value={name}>
+            {name}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
     <Button
@@ -904,7 +785,7 @@ const DailyPlanning = () => {
 </div>
 
           <Button
-            onClick={distributeEmployees}
+            onClick={handleDistribute}
             disabled={loading || selectedEmployees.length === 0}
             className="w-full gap-2 bg-gradient-to-r from-accent to-primary"
           >
@@ -919,7 +800,7 @@ const DailyPlanning = () => {
 {Object.keys(assignments).length > 0 && (
   <Card className="shadow-lg border-border/50">
     <CardHeader className="pb-3">
-      <CardTitle className="text-lg">Dagens tilldelningar</CardTitle>
+      <CardTitle className="text-lg">Tilldelningar</CardTitle>
     </CardHeader>
     <CardContent>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -960,12 +841,9 @@ const DailyPlanning = () => {
         }
         )()}
 
-{STATIONS.filter(station => !SUB_STATIONS[station]).map((station) => {
+{topLevelStationNames.map((station) => {
   const assigned = assignments[station] || [];
   const needed = stationNeeds[station] || 0;
-  const subStations = Object.entries(SUB_STATIONS)
-    .filter(([_, parent]) => parent === station)
-    .map(([sub]) => sub);
 
   return (
     <StationCard
@@ -973,12 +851,15 @@ const DailyPlanning = () => {
       station={station}
       assigned={assigned}
       needed={needed}
+      layout={getLayout(station)}
+      slots={getStationSlots(station)}
+      isManual={station === manualStationName}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       onDragStart={handleDragStart}
       onDropOnPackPosition={handleDropOnPackPosition}
       getEmployeeShortName={getEmployeeShortName}
-      subStations={subStations}
+      subStations={getSubStationNames(station)}
       assignments={assignments}
       stationNeeds={stationNeeds}
     />
@@ -1034,7 +915,7 @@ const DailyPlanning = () => {
   employeeStations={employeeStations}
   stationStats={stationStats}
   recentWork={recentWork}
-  stations={STATIONS}
+  stations={stationNames}
   onToggleStation={toggleStation}
 />
     </div>

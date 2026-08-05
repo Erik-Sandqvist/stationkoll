@@ -21,6 +21,7 @@ export type Database = {
           employee_id: string
           id: string
           lane: number | null
+          shift: string
           station: string
         }
         Insert: {
@@ -29,6 +30,7 @@ export type Database = {
           employee_id: string
           id?: string
           lane?: number | null
+          shift?: string
           station: string
         }
         Update: {
@@ -37,6 +39,7 @@ export type Database = {
           employee_id?: string
           id?: string
           lane?: number | null
+          shift?: string
           station?: string
         }
         Relationships: [
@@ -108,6 +111,7 @@ export type Database = {
           id: string
           need_date: string
           needed_count: number
+          shift: string
           station: string
         }
         Insert: {
@@ -115,6 +119,7 @@ export type Database = {
           id?: string
           need_date: string
           needed_count?: number
+          shift?: string
           station: string
         }
         Update: {
@@ -122,9 +127,54 @@ export type Database = {
           id?: string
           need_date?: string
           needed_count?: number
+          shift?: string
           station?: string
         }
         Relationships: []
+      }
+      stations: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          layout_type: string
+          manual_only: boolean
+          name: string
+          parent_station_id: string | null
+          slots: number | null
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          layout_type?: string
+          manual_only?: boolean
+          name: string
+          parent_station_id?: string | null
+          slots?: number | null
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          layout_type?: string
+          manual_only?: boolean
+          name?: string
+          parent_station_id?: string | null
+          slots?: number | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stations_parent_station_id_fkey"
+            columns: ["parent_station_id"]
+            isOneToOne: false
+            referencedRelation: "stations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       work_history: {
         Row: {
@@ -132,6 +182,7 @@ export type Database = {
           employee_id: string
           id: string
           lane: number | null
+          shift: string
           station: string
           work_date: string
         }
@@ -140,6 +191,7 @@ export type Database = {
           employee_id: string
           id?: string
           lane?: number | null
+          shift?: string
           station: string
           work_date: string
         }
@@ -148,6 +200,7 @@ export type Database = {
           employee_id?: string
           id?: string
           lane?: number | null
+          shift?: string
           station?: string
           work_date?: string
         }

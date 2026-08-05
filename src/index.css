@@ -2,13 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* Designsystemet. Alla färger, gradienter och typsnitt definieras här.
+Alla färger MÅSTE anges som HSL.
+
+Värdena nedan är standardtemat. För att köra appen i en annan kunds färger,
+sätt `theme` i src/config/branding.ts — de värdena skriver över dessa vid
+uppstart, för både ljust och mörkt läge.
 */
 
 @layer base {
   :root {
-    /* IKEA Light Theme - Inspired by IKEA's blue and yellow */
+    /* Standardtema - blått och gult */
     --background: 0 0% 98%;
     --foreground: 214 100% 20%;
 

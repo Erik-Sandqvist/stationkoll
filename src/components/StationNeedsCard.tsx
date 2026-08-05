@@ -6,28 +6,33 @@ import { Calendar } from "lucide-react";
 
 interface StationNeedsCardProps {
   stations: string[];
+  /** Stationen som bemannas för hand — behov anges inte för den */
+  manualStationName?: string | null;
   stationNeeds: { [key: string]: number };
   onUpdateNeed: (station: string, count: number) => void;
   onSave: () => void;
   loading: boolean;
+  hasUnsavedChanges?: boolean;
 }
 
 export const StationNeedsCard = ({
   stations,
+  manualStationName = null,
   stationNeeds,
   onUpdateNeed,
   onSave,
   loading,
+  hasUnsavedChanges = false,
 }: StationNeedsCardProps) => {
   return (
     <Card className="shadow-lg border-border/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Calendar className="h-6 w-6 text-primary" />
-          Personalbehov idag
+          Personalbehov
         </CardTitle>
         <CardDescription>
-          Ange hur många personer som behövs på varje station idag
+          Ange hur många personer som behövs på varje station det valda datumet
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -44,11 +49,16 @@ export const StationNeedsCard = ({
                 value={stationNeeds[station] || 0}
                 onChange={(e) => onUpdateNeed(station, parseInt(e.target.value) || 0)}
                 className="text-center font-semibold bg-sidebar-input large-spinner h-10"
-                disabled={station === "FL"}
+                disabled={station === manualStationName}
               />
             </div>
           ))}
         </div>
+        {hasUnsavedChanges && (
+          <p className="text-center text-sm text-muted-foreground mb-3">
+            Du har ändringar som inte är sparade
+          </p>
+        )}
         <div className="flex justify-center">
           <Button
             onClick={onSave}

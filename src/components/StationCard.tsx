@@ -1,9 +1,16 @@
 import { Card } from "@/components/ui/card";
+import type { StationLayout } from "@/hooks/useStations";
 
 interface StationCardProps {
   station: string;
   assigned: string[];
   needed: number;
+  /** 'grid' = numrerade platser, 'list' = enkel lista. Kommer från stations-tabellen. */
+  layout: StationLayout;
+  /** Antal numrerade platser vid grid-layout */
+  slots: number | null;
+  /** Stationer som bemannas för hand visar ingen behovsräknare */
+  isManual?: boolean;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (station: string) => void;
   onDragStart: (employeeId: string, station: string) => void;
@@ -18,6 +25,9 @@ export const StationCard = ({
   station,
   assigned,
   needed,
+  layout,
+  slots,
+  isManual = false,
   onDragOver,
   onDrop,
   onDragStart,
@@ -27,9 +37,8 @@ export const StationCard = ({
   assignments,
   stationNeeds,
 }: StationCardProps) => {
-  const filledCount = station === "Pack" || station === "Auto Pack" || station === "Auto Plock"
-    ? assigned.filter(a => a).length
-    : assigned.length;
+  const isGrid = layout === "grid" && slots !== null;
+  const filledCount = isGrid ? assigned.filter(a => a).length : assigned.length;
 
   return (
     <Card
@@ -39,7 +48,7 @@ export const StationCard = ({
     >
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-black">{station}</h3>
-        {station !== "FL" && (
+        {!isManual && (
           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
             filledCount >= needed
               ? 'bg-black/60 text-white'
@@ -50,20 +59,12 @@ export const StationCard = ({
         )}
       </div>
 
-      {/* Render logic for different station types */}
-      {station === "Pack" ? (
-        <PackStationContent
+      {/* Layouten styrs av stationens layout_type, inte av dess namn */}
+      {isGrid ? (
+        <GridStationContent
           assigned={assigned}
           station={station}
-          onDragStart={onDragStart}
-          onDragOver={onDragOver}
-          onDropOnPackPosition={onDropOnPackPosition}
-          getEmployeeShortName={getEmployeeShortName}
-        />
-      ) : station === "Auto Pack" || station === "Auto Plock" ? (
-        <AutoStationContent
-          assigned={assigned}
-          station={station}
+          slots={slots}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
           onDropOnPackPosition={onDropOnPackPosition}
@@ -99,57 +100,29 @@ export const StationCard = ({
   );
 };
 
-// Helper components for different station types
-interface ContentProps {
+// Stationer med numrerade platser. Antalet platser kommer från stations-tabellen,
+// så samma komponent renderar både en 12-platsers Pack och en 8-platsers autolinje.
+interface GridContentProps {
   assigned: string[];
   station: string;
+  slots: number;
   onDragStart: (employeeId: string, station: string) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDropOnPackPosition: (station: string, index: number) => void;
   getEmployeeShortName: (id: string) => string;
 }
 
-const PackStationContent = ({ 
-  assigned, 
-  station, 
-  onDragStart, 
-  onDragOver, 
-  onDropOnPackPosition, 
-  getEmployeeShortName 
-}: ContentProps) => (
+const GridStationContent = ({
+  assigned,
+  station,
+  slots,
+  onDragStart,
+  onDragOver,
+  onDropOnPackPosition,
+  getEmployeeShortName
+}: GridContentProps) => (
   <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto">
-    {Array.from({ length: 12 }, (_, idx) => (
-      <div
-        key={idx}
-        draggable={!!assigned[idx]}
-        onDragStart={() => assigned[idx] && onDragStart(assigned[idx], station)}
-        onDragOver={onDragOver}
-        onDrop={(e) => {
-          e.stopPropagation();
-          onDropOnPackPosition(station, idx);
-        }}
-        className={`text-sm text-black p-2 rounded-lg ${
-          assigned[idx]
-            ? 'bg-white cursor-move hover:bg-primary/25 backdrop-blur-sm'
-            : 'backdrop-blur-sm'
-        } transition-all duration-200`}
-      >
-        {idx + 1}. {assigned[idx] ? getEmployeeShortName(assigned[idx]) : '–'}
-      </div>
-    ))}
-  </div>
-);
-
-const AutoStationContent = ({ 
-  assigned, 
-  station, 
-  onDragStart, 
-  onDragOver, 
-  onDropOnPackPosition, 
-  getEmployeeShortName 
-}: ContentProps) => (
-  <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto">
-    {Array.from({ length: 8 }, (_, idx) => (
+    {Array.from({ length: slots }, (_, idx) => (
       <div
         key={idx}
         draggable={!!assigned[idx]}
