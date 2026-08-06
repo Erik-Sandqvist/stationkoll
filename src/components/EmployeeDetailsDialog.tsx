@@ -122,5 +122,5 @@ export const EmployeeDetailsDialog = ({
         </div>
       </DialogContent>
     </Dialog>
-  );
+  ); 
 };

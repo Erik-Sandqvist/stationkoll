@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Users, Shuffle, Search, Info, Settings } from "lucide-react";
+import { Calendar, Users, Shuffle, Search, Info, Settings, FileDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +35,8 @@ import { PlanningHeader } from "@/components/PlanningHeader";
 import { StationsMissingNotice } from "@/components/StationsMissingNotice";
 import { monthsBefore, todayKey } from "@/utils/date";
 import { ALL_SHIFTS, DEFAULT_SHIFT, SHIFTS, type Shift } from "@/config/shifts";
+import { exportPlanningPdf } from "@/utils/planningPdf";
+import { branding } from "@/config/branding";
 
 interface Employee {
   id: string;
@@ -68,6 +70,7 @@ const DailyPlanning = () => {
   const [flManual, setFlManual] = useState("");
   const [hasUnsavedNeeds, setHasUnsavedNeeds] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [draggedEmployee, setDraggedEmployee] = useState<{ id: string; fromStation: string } | null>(null);
   const [draggedFrom, setDraggedFrom] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -511,6 +514,48 @@ const DailyPlanning = () => {
     }
   };
 
+  const handleExportPdf = async () => {
+    setExporting(true);
+
+    try {
+      const assignedIds = new Set(
+        Object.values(assignments).flat().filter(Boolean)
+      );
+
+      await exportPlanningPdf({
+        date: selectedDate,
+        shift: planningShift,
+        topLevelStationNames,
+        stationNames,
+        getSubStationNames,
+        getLayout,
+        getSlots: getStationSlots,
+        manualStationName,
+        assignments,
+        stationNeeds,
+        employeeName: (id) => employees.find((e) => e.id === id)?.name || id,
+        // Bara de som valts för dagen kan sakna station; efter en omladdning är
+        // urvalet tomt och listan blir därmed också tom
+        unassignedIds: selectedEmployees.filter((id) => !assignedIds.has(id)),
+        organizationName: branding.organizationName,
+      });
+
+      toast({
+        title: "PDF skapad!",
+        description: "Bemanningen har laddats ner som liggande A4.",
+      });
+    } catch (err) {
+      console.error("Kunde inte skapa PDF:", err);
+      toast({
+        title: "Kunde inte skapa PDF",
+        description: err instanceof Error ? err.message : "Okänt fel vid export",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const clearAllAssignments = () => {
     // Rensa assignments state (sparas inte till databasen förrän användaren klickar på Spara)
     setAssignments({});
@@ -871,15 +916,24 @@ const DailyPlanning = () => {
           <Button
             onClick={saveAllAssignments}
             disabled={loading}
-            className="w-1/3 bg-gradient-to-r from-primary to-accent"
+            className="w-1/4 bg-gradient-to-r from-primary to-accent"
           >
             Spara
+          </Button>
+          <Button
+            onClick={handleExportPdf}
+            disabled={exporting}
+            variant="outline"
+            className="w-1/4 gap-2"
+          >
+            <FileDown className="h-4 w-4" />
+            {exporting ? "Skapar PDF..." : "Exportera PDF"}
           </Button>
           <Button
             onClick={clearAllAssignments}
             disabled={loading}
             variant="destructive"
-            className="w-1/3"
+            className="w-1/4"
           >
             Rensa
           </Button>
