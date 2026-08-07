@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Station-Koll">
+  <rect width="32" height="32" rx="7" fill="#274766"/>
+  <rect x="7" y="7" width="7" height="7" rx="2" fill="#7FB2D9"/>
+  <rect x="18" y="7" width="7" height="7" rx="2" fill="#7FB2D9"/>
+  <rect x="7" y="18" width="7" height="7" rx="2" fill="#7FB2D9"/>
+  <rect x="18" y="18" width="7" height="7" rx="2" fill="#F2F7FB"/>
+</svg>

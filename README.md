@@ -5,17 +5,20 @@ stationskompetenser och fördela dem rättvist till arbetsstationer varje dag.
 
 ## Vad appen gör
 
-Appen har tre flikar:
+Appen har fyra flikar:
 
 - **Dashboard** – nyckeltal för dagen: antal medarbetare (totalt/aktiva), antal
   tilldelningar, antal stationer med behov och om dagen är planerad eller inte.
 - **Medarbetare** – lägg till, aktivera/inaktivera och radera personal. Varje
-  person har ett skift (Skift 1, Skift 2, Natt, Bemanningsföretag) och en
-  uppsättning stationer hen är upplärd på. Här syns även hur många pass personen
-  kört per station.
+  person har ett skift (Skift 1, Skift 2, Natt, Bemanningsföretag), ett arbetslag
+  och en uppsättning stationer hen är upplärd på. Här skapas även grupperna. Här
+  syns också hur många pass personen kört per station.
 - **Dagsplanering** – välj datum och skift, ange behov per station, välj vilka
   som jobbar, låt systemet fördela automatiskt och justera sedan med
-  drag-and-drop.
+  drag-and-drop. Dagens bemanning kan exporteras som en liggande PDF med
+  färgkodade stationer.
+- **Stationer** – lägg upp anläggningens stationer och välj om de ska ha
+  numrerade platser och i så fall hur många. Stationer kan även stängas av.
 
 ### Fördelningslogiken
 
@@ -44,9 +47,22 @@ Inget av det anläggningsspecifika ligger i komponenterna:
 
 | Vad | Var |
 | --- | --- |
-| Stationer, layout, antal platser, understationer | Tabellen `stations` i databasen |
+| Stationer, layout, antal platser, understationer | Fliken **Stationer**, dvs. tabellen `stations` |
+| Arbetslag | Fliken **Medarbetare**, dvs. tabellen `groups` |
 | Organisationsnamn, logga, färger | [`src/config/branding.ts`](src/config/branding.ts) |
 | Skiftnamn | [`src/config/shifts.ts`](src/config/shifts.ts) |
+
+`branding.ts` innehåller de färdiga profilerna i `brandings` — i dag `volvo` och
+`ikea`. Förvalet styrs av `DEFAULT_BRAND`.
+
+Sätts `VITE_BRAND_SWITCHER=true` visas en profilväljare i navbaren, så att namn,
+logga och färger kan bytas live under en demo. Valet sparas i localStorage. Vid en
+skarp kundinstallation lämnas variabeln tom: då körs alltid förvalsprofilen, och
+ett gammalt värde i webbläsaren kan inte följa med in.
+
+Färgerna sätts som CSS-variabler på `:root` och `.dark`, så en profil kan ange
+egna färger för både ljust och mörkt läge. Utelämnas de används standardtemat i
+`index.css`.
 
 En station har `layout_type` (`list` eller `grid`), `slots` (antal numrerade
 platser vid grid), `parent_station_id` (visas inuti en annan stations kort) och
@@ -97,7 +113,8 @@ Schemat ligger i `supabase/migrations/`:
 | Tabell | Innehåll |
 | --- | --- |
 | `stations` | Anläggningens stationer, layout och antal platser |
-| `employees` | Namn, aktiv-status och skift |
+| `groups` | Arbetslag som medarbetare kan delas in i |
+| `employees` | Namn, aktiv-status, skift och grupp |
 | `employee_stations` | Vilka stationer varje medarbetare är upplärd på |
 | `station_needs` | Hur många som behövs per station, datum och skift |
 | `daily_assignments` | Faktiska placeringar per datum och skift |
@@ -112,14 +129,25 @@ supabase db push
 ### Demodata
 
 För att visa upp appen utan riktiga personuppgifter finns ett seed-skript som
-skapar en fiktiv fordonsfabrik med 44 påhittade medarbetare och sex månaders
-historik:
+skapar en fiktiv fordonsfabrik med 44 påhittade medarbetare i fyra arbetslag och
+sex månaders historik:
 
 ```bash
 psql "$DATABASE_URL" -f supabase/seed/demo_fordonsfabrik.sql
 ```
 
-Skriptet tömmer alla tabeller först — kör det bara mot ett separat demoprojekt.
+Skriptet tömmer alla tabeller först — kör det bara mot ett demoprojekt. Det går
+även att klistra in filen i SQL-editorn i Supabase-dashboarden om CLI:t inte är
+installerat.
+
+### Lösenordsspärr under demo
+
+Sätts `VITE_DEMO_PASSWORD` i `.env` läggs en enkel lösenordsruta framför appen.
+Lämnas den tom är spärren avstängd.
+
+Spärren döljer **gränssnittet, inte datan**: Supabase-nyckeln ligger kvar i
+klienten och RLS-policyerna är `USING (true)`, så API:et är fortfarande öppet för
+den som letar. Riktigt skydd kräver Supabase Auth och omskrivna policyer.
 
 ## Projektstruktur
 
@@ -127,8 +155,11 @@ Skriptet tömmer alla tabeller först — kör det bara mot ett separat demoproj
 src/
   components/
     Dashboard.tsx           Översiktsvyn
-    EmployeeManagement.tsx  Hantering av medarbetare och kompetenser
+    EmployeeManagement.tsx  Medarbetare, kompetenser och arbetslag
+    StationManagement.tsx   Upplägg av stationer och platsantal
     DailyPlanning.tsx       Dagsplanering och fördelning
+    DemoGate.tsx            Lösenordsspärr under demo
+    BrandSwitcher.tsx       Byter kundprofil live (endast demoläge)
     PlanningHeader.tsx      Val av datum och skift
     StationNeedsCard.tsx    Behov per station
     StationCard.tsx         Stationskort med drag-and-drop
@@ -139,9 +170,13 @@ src/
     shifts.ts               Skiftindelning
   hooks/
     useStations.ts          Hämtar stationerna från databasen
+    useGroups.ts            Hämtar arbetslagen från databasen
+    useBranding.tsx         Aktiv kundprofil
   utils/
     distribution.ts         Fördelningsalgoritmen (testad)
     stationRotation.ts      Rotationsregler (senaste station per person)
+    planningPdf.ts          PDF-export av dagens bemanning
+    stationColors.ts        Färgkodning per station
     date.ts                 Datumnycklar i lokal tid
   integrations/supabase/    Supabase-klient och genererade typer
   pages/                    Sidor och routing

@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Users, Calendar, TrendingUp, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useStations } from "@/hooks/useStations";
 import { todayKey } from "@/utils/date";
 
 interface Stats {
@@ -13,6 +14,8 @@ interface Stats {
 }
 
 const Dashboard = () => {
+  // Namnet på den handbemannade stationen skiljer sig mellan anläggningar
+  const { manualStationName } = useStations();
   const [stats, setStats] = useState<Stats>({
     totalEmployees: 0,
     activeEmployees: 0,
@@ -152,7 +155,9 @@ const Dashboard = () => {
               <li>Gå till <strong>Dagsplanering</strong> och ange hur många som behövs på varje station</li>
               <li>Välj vilka som arbetar idag</li>
               <li>Klicka på "Fördela medarbetare" så fördelar systemet automatiskt baserat på historik</li>
-              <li>FL-stationen kan du fylla i manuellt</li>
+              {manualStationName && (
+                <li>{manualStationName} fyller du i manuellt</li>
+              )}
             </ol>
           </div>
 
@@ -164,9 +169,7 @@ const Dashboard = () => {
         </CardContent>
       </Card>
       <div className="m-4">
-        <p>Version 1.1.3</p>
-        <p>Applikationen är under utveckling och kan innehålla buggar. Vid frågor och support, kontakta Erik Sandqvist.</p>
-        <a className="underline" href="mailto:esandqvist04@gmail.com">esandqvist04@gmail.com</a>
+        <p className="text-xs text-muted-foreground">Version 1.1.3</p>
       </div>
     </div>
   );

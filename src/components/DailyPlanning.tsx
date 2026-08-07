@@ -36,7 +36,7 @@ import { StationsMissingNotice } from "@/components/StationsMissingNotice";
 import { monthsBefore, todayKey } from "@/utils/date";
 import { ALL_SHIFTS, DEFAULT_SHIFT, SHIFTS, type Shift } from "@/config/shifts";
 import { exportPlanningPdf } from "@/utils/planningPdf";
-import { branding } from "@/config/branding";
+import { useBranding } from "@/hooks/useBranding";
 
 interface Employee {
   id: string;
@@ -51,6 +51,8 @@ interface StationNeed {
 }
 
 const DailyPlanning = () => {
+  // PDF:ens sidhuvud ska bära samma organisationsnamn som appen visas i
+  const { branding } = useBranding();
   const {
     stationNames,
     topLevelStationNames,
@@ -782,8 +784,10 @@ const DailyPlanning = () => {
       </div>
     ))}
   </div>
+  {/* Bara anläggningar med en handbemannad station har den här väljaren */}
+  {manualStationName && (
   <div className="space-y-2 pt-4 border-t">
-  <Label htmlFor="fl-manual">FL Station</Label>
+  <Label htmlFor="fl-manual">{manualStationName}</Label>
   <Popover open={flPopoverOpen} onOpenChange={setFlPopoverOpen}>
     <PopoverTrigger asChild>
       <Button
@@ -828,6 +832,7 @@ const DailyPlanning = () => {
     </PopoverContent>
   </Popover>
 </div>
+  )}
 
           <Button
             onClick={handleDistribute}

@@ -6,9 +6,9 @@
 -- Syftet är att kunna demonstrera appen utan att visa riktiga medarbetares namn
 -- och arbetshistorik för utomstående. Alla personer nedan är påhittade.
 --
--- Innehåller: 9 stationer, 44 medarbetare fördelade på tre skift,
--- kompetenser per medarbetare och sex månaders arbetshistorik bakåt, så att
--- statistiken och rotationsvarningarna faktiskt har något att visa.
+-- Innehåller: 9 stationer, 44 medarbetare fördelade på tre skift och fyra
+-- arbetslag, kompetenser per medarbetare och sex månaders arbetshistorik bakåt,
+-- så att statistiken och rotationsvarningarna faktiskt har något att visa.
 
 BEGIN;
 
@@ -19,6 +19,7 @@ TRUNCATE TABLE public.work_history,
                public.station_needs,
                public.employee_stations,
                public.employees,
+               public.groups,
                public.stations
   RESTART IDENTITY CASCADE;
 
@@ -94,7 +95,26 @@ INSERT INTO public.employees (name, shift, is_active) VALUES
   ('Sofia Norén',         'Bemanningsföretag', true),
   ('Tobias Winge',        'Bemanningsföretag', true);
 
--- 4. Kompetenser ------------------------------------------------------------
+-- 4. Grupper ----------------------------------------------------------------
+--
+-- Arbetslagen som medarbetarna delas in i. Fördelningen är deterministisk
+-- utifrån namnet, så samma person hamnar i samma lag varje gång skriptet körs.
+
+INSERT INTO public.groups (name) VALUES
+  ('Lag Alfa'),
+  ('Lag Beta'),
+  ('Lag Gamma'),
+  ('Lag Delta');
+
+UPDATE public.employees e
+SET group_id = g.id
+FROM (
+  SELECT id, row_number() OVER (ORDER BY name) - 1 AS idx
+  FROM public.groups
+) AS g
+WHERE g.idx = ((hashtext(e.name) % 4) + 4) % 4;
+
+-- 5. Kompetenser ------------------------------------------------------------
 --
 -- Fördelas pseudoslumpmässigt men deterministiskt utifrån namnet, så att
 -- resultatet blir detsamma varje gång skriptet körs. Alla får minst en
@@ -129,7 +149,7 @@ FROM public.employees e
 WHERE e.name IN ('Anna Lindqvist', 'Rebecka Holm', 'Hanna Bergström')
 ON CONFLICT (employee_id, station) DO NOTHING;
 
--- 5. Arbetshistorik ---------------------------------------------------------
+-- 6. Arbetshistorik ---------------------------------------------------------
 --
 -- Sex månader bakåt, vardagar. Varje medarbetare placeras på en av sina egna
 -- stationer, roterande över tid så att statistiken blir ojämn nog att
@@ -160,7 +180,7 @@ CROSS JOIN LATERAL (
 WHERE EXTRACT(ISODOW FROM d.work_date) <= 5
   AND ((hashtext(e.name || d.work_date::text) % 10) + 10) % 10 < 8;
 
--- 6. Behov för idag ---------------------------------------------------------
+-- 7. Behov för idag ---------------------------------------------------------
 --
 -- Så att appen visar något direkt när den öppnas.
 
@@ -184,6 +204,7 @@ COMMIT;
 -- Kontroll
 SELECT 'stationer' AS tabell, count(*) FROM public.stations
 UNION ALL SELECT 'medarbetare', count(*) FROM public.employees
+UNION ALL SELECT 'grupper', count(*) FROM public.groups
 UNION ALL SELECT 'kompetenser', count(*) FROM public.employee_stations
 UNION ALL SELECT 'historikrader', count(*) FROM public.work_history
 UNION ALL SELECT 'behov idag', count(*) FROM public.station_needs;
