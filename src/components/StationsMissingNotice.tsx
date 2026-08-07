@@ -34,17 +34,25 @@ export const StationsMissingNotice = ({ error }: StationsMissingNoticeProps) => 
 
       <div className="space-y-1">
         <p className="font-medium">Så här gör du:</p>
-        <ol className="list-inside list-decimal space-y-1 text-muted-foreground">
-          <li>
-            Kör migrationerna i <code className="font-mono">supabase/migrations/</code>{" "}
-            mot ditt Supabase-projekt (<code className="font-mono">supabase db push</code>,
-            eller klistra in dem i SQL-editorn i Supabase-dashboarden).
-          </li>
-          <li>
-            Ladda om sidan. Migrationen lägger upp standarduppsättningen av
-            stationer automatiskt.
-          </li>
-        </ol>
+        {error ? (
+          <ol className="list-inside list-decimal space-y-1 text-muted-foreground">
+            <li>
+              Kör migrationerna i <code className="font-mono">supabase/migrations/</code>{" "}
+              mot ditt Supabase-projekt (<code className="font-mono">supabase db push</code>,
+              eller klistra in dem i SQL-editorn i Supabase-dashboarden).
+            </li>
+            <li>
+              Ladda om sidan. Migrationen lägger upp standarduppsättningen av
+              stationer automatiskt.
+            </li>
+          </ol>
+        ) : (
+          <p className="text-muted-foreground">
+            Gå till fliken <span className="font-medium">Stationer</span> och lägg
+            upp dem där. För varje station väljer du om den ska ha numrerade
+            platser och i så fall hur många.
+          </p>
+        )}
       </div>
     </CardContent>
   </Card>
