@@ -166,7 +166,7 @@ const StationManagement = () => {
   };
 
   const deleteStation = async (station: ManagedStation) => {
-    setPendingDelete(null);
+    setConfirmOpen(false);
 
     const { error } = await supabase.from("stations").delete().eq("id", station.id);
 
@@ -324,7 +324,10 @@ const StationManagement = () => {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => setPendingDelete(station)}
+                      onClick={() => {
+                        setPendingDelete(station);
+                        setConfirmOpen(true);
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -336,10 +339,7 @@ const StationManagement = () => {
         </div>
       </CardContent>
 
-      <AlertDialog
-        open={pendingDelete !== null}
-        onOpenChange={(open) => !open && setPendingDelete(null)}
-      >
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort {pendingDelete?.name}?</AlertDialogTitle>
