@@ -333,6 +333,95 @@ const EmployeeManagement = () => {
     return matchesShift && matchesGroup;
   });
 
+  // Bara grupper som har någon att visa får ett eget kort. Tomma grupper syns
+  // ändå i chipsen ovanför, med sitt medlemsantal.
+  const groupsWithMembers = groups
+    .map((group) => ({
+      group,
+      members: visibleEmployees.filter((employee) => employee.group_id === group.id),
+    }))
+    .filter(({ members }) => members.length > 0);
+
+  const groupIds = new Set(groups.map((group) => group.id));
+  const ungroupedEmployees = visibleEmployees.filter(
+    (employee) => !employee.group_id || !groupIds.has(employee.group_id)
+  );
+
+  /**
+   * En rad i medarbetarlistan. Samma markup används både inuti gruppkorten och i
+   * listan utan grupp, så raden måste tåla halva bredden — därför flex-wrap.
+   */
+  const renderEmployeeRow = (employee: Employee) => (
+    <Card
+      key={employee.id}
+      className="p-4 flex flex-wrap items-center justify-between gap-3 hover:shadow-md transition-shadow"
+    >
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => openEmployeeDetails(employee)}
+          className="font-medium hover:text-primary transition-colors cursor-pointer text-left"
+        >
+          {employee.name}
+        </button>
+        <Badge
+          variant={employee.is_active ? "default" : "secondary"}
+          className={employee.is_active ? "bg-success text-success-foreground" : ""}
+        >
+          {employee.is_active ? "Aktiv" : "Inaktiv"}
+        </Badge>
+        <Badge variant="outline">{employee.shift}</Badge>
+      </div>
+      <div className="flex items-center gap-2">
+        {!groupsError && (
+          <Select
+            value={employee.group_id ?? NO_GROUP}
+            onValueChange={(value) => changeEmployeeGroup(employee, value)}
+          >
+            <SelectTrigger
+              className="h-9 w-40 bg-sidebar-input"
+              aria-label={`Grupp för ${employee.name}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_GROUP}>Ingen grupp</SelectItem>
+              {groups.map((group) => (
+                <SelectItem key={group.id} value={group.id}>
+                  {group.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => toggleEmployeeStatus(employee.id, employee.is_active)}
+          className="gap-2"
+          title={employee.is_active ? "Inaktivera" : "Aktivera"}
+        >
+          {employee.is_active ? (
+            <UserX className="h-4 w-4" />
+          ) : (
+            <UserCheck className="h-4 w-4" />
+          )}
+          <span className="sr-only">
+            {employee.is_active ? "Inaktivera" : "Aktivera"}
+          </span>
+        </Button>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => deleteEmployee(employee.id, employee.name)}
+          title="Ta bort"
+        >
+          <Trash2 className="h-4 w-4" />
+          <span className="sr-only">Ta bort</span>
+        </Button>
+      </div>
+    </Card>
+  );
+
   return (
     <Card className="shadow-lg border-border/50">
       <CardHeader>
@@ -504,92 +593,44 @@ const EmployeeManagement = () => {
               </div>
             </div>
           </div>
-          <div className="grid gap-2">
-            {visibleEmployees.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                {employees.length === 0
-                  ? "Inga medarbetare än. Lägg till din första medarbetare ovan."
-                  : "Inga medarbetare matchar filtret."}
-              </p>
-            ) : (
-              visibleEmployees.map((employee) => (
-                <Card
-                  key={employee.id}
-                  className="p-4 flex items-center justify-between hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => openEmployeeDetails(employee)}
-                      className="font-medium hover:text-primary transition-colors cursor-pointer text-left"
-                    >
-                      {employee.name}
-                    </button>
-                    <Badge
-                      variant={employee.is_active ? "default" : "secondary"}
-                      className={
-                        employee.is_active
-                          ? "bg-success text-success-foreground"
-                          : ""
-                      }
-                    >
-                      {employee.is_active ? "Aktiv" : "Inaktiv"}
-                    </Badge>
-                    <Badge variant="outline">{employee.shift}</Badge>
+          {visibleEmployees.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              {employees.length === 0
+                ? "Inga medarbetare än. Lägg till din första medarbetare ovan."
+                : "Inga medarbetare matchar filtret."}
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {/* Grupperna i två spalter — annars blir listan orimligt lång */}
+              {groupsWithMembers.length > 0 && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {groupsWithMembers.map(({ group, members }) => (
+                    <Card key={group.id} className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-foreground">{group.name}</h4>
+                        <Badge variant="secondary">{members.length}</Badge>
+                      </div>
+                      <div className="grid gap-2">{members.map(renderEmployeeRow)}</div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {ungroupedEmployees.length > 0 && (
+                <div className="space-y-2">
+                  {/* Rubriken behövs bara när det finns grupper att skilja dem från */}
+                  {groupsWithMembers.length > 0 && (
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      Utan grupp ({ungroupedEmployees.length})
+                    </h4>
+                  )}
+                  <div className="grid gap-2">
+                    {ungroupedEmployees.map(renderEmployeeRow)}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {!groupsError && (
-                      <Select
-                        value={employee.group_id ?? NO_GROUP}
-                        onValueChange={(value) => changeEmployeeGroup(employee, value)}
-                      >
-                        <SelectTrigger
-                          className="h-9 w-44 bg-sidebar-input"
-                          aria-label={`Grupp för ${employee.name}`}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NO_GROUP}>Ingen grupp</SelectItem>
-                          {groups.map((group) => (
-                            <SelectItem key={group.id} value={group.id}>
-                              {group.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        toggleEmployeeStatus(employee.id, employee.is_active)
-                      }
-                      className="gap-2"
-                    >
-                      {employee.is_active ? (
-                        <>
-                          <UserX className="h-4 w-4" />
-                          Inaktivera
-                        </>
-                      ) : (
-                        <>
-                          <UserCheck className="h-4 w-4" />
-                          Aktivera
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteEmployee(employee.id, employee.name)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </Card>
-              ))
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </CardContent>
 

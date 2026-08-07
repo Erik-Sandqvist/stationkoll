@@ -22,9 +22,26 @@ export const fromDateKey = (key: string): Date => {
   return new Date(year, month - 1, day);
 };
 
-/** Datumnyckel för ett antal månader bakåt från ett givet datum */
+/** Sista dagen i en månad (månad är nollbaserad, som i Date) */
+const lastDayOfMonth = (year: number, month: number): number =>
+  new Date(year, month + 1, 0).getDate();
+
+/**
+ * Datumnyckel för ett antal månader bakåt från ett givet datum.
+ *
+ * Dagen klipps till månadens sista om målmånaden är kortare. Utan det svämmar
+ * `setMonth` över till nästa månad: 31 mars minus en månad blev 3 mars, alltså
+ * ett datum *senare* än det man räknade från, och sexmånadersfönstret för
+ * historiken hamnade en dag fel varje gång planeringen låg på en 31:e.
+ */
 export const monthsBefore = (key: string, months: number): string => {
   const date = fromDateKey(key);
+  const day = date.getDate();
+
+  // Dag 1 först, annars hinner setMonth svämma över innan dagen klipps
+  date.setDate(1);
   date.setMonth(date.getMonth() - months);
+  date.setDate(Math.min(day, lastDayOfMonth(date.getFullYear(), date.getMonth())));
+
   return toDateKey(date);
 };
