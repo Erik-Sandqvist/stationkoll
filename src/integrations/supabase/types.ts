@@ -84,6 +84,7 @@ export type Database = {
       employees: {
         Row: {
           created_at: string | null
+          group_id: string | null
           id: string
           is_active: boolean | null
           name: string
@@ -91,6 +92,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          group_id?: string | null
           id?: string
           is_active?: boolean | null
           name: string
@@ -98,10 +100,37 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          group_id?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
           shift?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groups: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
         }
         Relationships: []
       }

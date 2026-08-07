@@ -6,10 +6,21 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { EmployeeDetailsDialog } from "@/components/EmployeeDetailsDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, UserCheck, UserX, Settings } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Trash2, UserCheck, UserX, Settings, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useStations } from "@/hooks/useStations";
+import { useGroups, type Group } from "@/hooks/useGroups";
 import { ALL_SHIFTS, DEFAULT_SHIFT, SHIFTS } from "@/config/shifts";
 import { monthsBefore, todayKey } from "@/utils/date";
 
@@ -19,14 +30,28 @@ interface Employee {
   is_active: boolean;
   created_at: string;
   shift: string;
+  /** Null = medarbetaren är inte indelad i något arbetslag */
+  group_id: string | null;
 }
+
+// Radix Select tillåter inte tomma värden, så "ingen grupp" och "alla grupper"
+// behöver egna nycklar. De sparas aldrig — group_id blir null respektive filtret
+// släpper igenom allt.
+const NO_GROUP = "utan-grupp";
+const ALL_GROUPS = "alla-grupper";
 
 const EmployeeManagement = () => {
   const { stationNames } = useStations();
+  const { groups, error: groupsError, refresh: refreshGroups } = useGroups();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [newEmployeeName, setNewEmployeeName] = useState("");
   const [newEmployeeShift, setNewEmployeeShift] = useState<string>(DEFAULT_SHIFT);
+  const [newEmployeeGroup, setNewEmployeeGroup] = useState<string>(NO_GROUP);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [pendingDeleteGroup, setPendingDeleteGroup] = useState<Group | null>(null);
+  const [confirmGroupDelete, setConfirmGroupDelete] = useState(false);
   const [filterShift, setFilterShift] = useState<string>(ALL_SHIFTS);
+  const [filterGroup, setFilterGroup] = useState<string>(ALL_GROUPS);
   const [loading, setLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [recentWork, setRecentWork] = useState<{station: string, work_date: string}[]>([]);
@@ -66,9 +91,15 @@ const EmployeeManagement = () => {
     }
 
     setLoading(true);
-    const { error } = await supabase
-      .from("employees")
-      .insert([{ name: newEmployeeName.trim(), shift: newEmployeeShift }]);
+    const { error } = await supabase.from("employees").insert([
+      {
+        name: newEmployeeName.trim(),
+        shift: newEmployeeShift,
+        // group_id skickas bara när en grupp valts, så att medarbetare går att
+        // lägga till även innan grupp-migrationen är körd
+        ...(newEmployeeGroup !== NO_GROUP && { group_id: newEmployeeGroup }),
+      },
+    ]);
 
     if (error) {
       toast({
@@ -83,9 +114,95 @@ const EmployeeManagement = () => {
       });
       setNewEmployeeName("");
       setNewEmployeeShift(DEFAULT_SHIFT);
+      // Gruppen behålls — man lägger oftast upp ett helt lag i följd
       fetchEmployees();
     }
     setLoading(false);
+  };
+
+  const addGroup = async () => {
+    const trimmed = newGroupName.trim();
+
+    if (!trimmed) {
+      toast({
+        title: "Namn krävs",
+        description: "Ange ett namn för gruppen",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (groups.some((group) => group.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast({
+        title: "Gruppen finns redan",
+        description: `Det finns redan en grupp som heter ${trimmed}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error } = await supabase.from("groups").insert([{ name: trimmed }]);
+
+    if (error) {
+      toast({
+        title: "Kunde inte skapa gruppen",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Skapad!", description: `Gruppen ${trimmed} har lagts till` });
+    setNewGroupName("");
+    refreshGroups();
+  };
+
+  const deleteGroup = async (group: Group) => {
+    setConfirmGroupDelete(false);
+
+    const { error } = await supabase.from("groups").delete().eq("id", group.id);
+
+    if (error) {
+      toast({
+        title: "Kunde inte ta bort gruppen",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Borttagen!",
+      description: `Gruppen ${group.name} har tagits bort`,
+    });
+
+    // Medarbetarna finns kvar men står nu utan grupp (ON DELETE SET NULL)
+    if (filterGroup === group.id) setFilterGroup(ALL_GROUPS);
+    if (newEmployeeGroup === group.id) setNewEmployeeGroup(NO_GROUP);
+    refreshGroups();
+    fetchEmployees();
+  };
+
+  const changeEmployeeGroup = async (employee: Employee, value: string) => {
+    const groupId = value === NO_GROUP ? null : value;
+
+    const { error } = await supabase
+      .from("employees")
+      .update({ group_id: groupId })
+      .eq("id", employee.id);
+
+    if (error) {
+      toast({
+        title: "Fel",
+        description: `Kunde inte byta grupp: ${error.message}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEmployees((prev) =>
+      prev.map((e) => (e.id === employee.id ? { ...e, group_id: groupId } : e))
+    );
   };
 
   const toggleEmployeeStatus = async (id: string, currentStatus: boolean) => {
@@ -208,6 +325,14 @@ const EmployeeManagement = () => {
     }
   };
 
+  const visibleEmployees = employees.filter((employee) => {
+    const matchesShift = filterShift === ALL_SHIFTS || employee.shift === filterShift;
+    const matchesGroup =
+      filterGroup === ALL_GROUPS ||
+      (filterGroup === NO_GROUP ? !employee.group_id : employee.group_id === filterGroup);
+    return matchesShift && matchesGroup;
+  });
+
   return (
     <Card className="shadow-lg border-border/50">
       <CardHeader>
@@ -247,6 +372,24 @@ const EmployeeManagement = () => {
               </SelectContent>
             </Select>
           </div>
+          {!groupsError && (
+            <div className="w-48 space-y-2">
+              <Label htmlFor="employee-group">Grupp</Label>
+              <Select value={newEmployeeGroup} onValueChange={setNewEmployeeGroup}>
+                <SelectTrigger id="employee-group" className="bg-sidebar-input">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_GROUP}>Ingen grupp</SelectItem>
+                  {groups.map((group) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="flex items-end">
             <Button
               onClick={addEmployee}
@@ -258,42 +401,118 @@ const EmployeeManagement = () => {
             </Button>
           </div>
         </div>
-        <div className="border flex-col"><p>Här kan man kanske ha möjliget att kolla på de olika grupperna (Förslag)</p>
-        <div className="border h-8 flex items-center pl-8">GruppNamn1 v</div>
-        <div className="border h-8 flex items-center pl-8">Ängland v</div>
-        <div className="border h-8 flex items-center pl-8">Solvinden v</div>
-        <div className="border h-8 flex items-center pl-8">GruppNamn4 v</div>
+        <div className="space-y-3 rounded-lg border p-4">
+          <div>
+            <h3 className="text-sm font-medium text-foreground">Grupper</h3>
+            <p className="text-sm text-muted-foreground">
+              Arbetslag som medarbetarna kan delas in i. En medarbetare hör till
+              en grupp.
+            </p>
+          </div>
+
+          {groupsError ? (
+            <p className="rounded-md bg-destructive/10 p-3 font-mono text-xs text-destructive">
+              {groupsError}
+            </p>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <Input
+                  className="max-w-xs bg-sidebar-input"
+                  placeholder="Namn på grupp..."
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addGroup()}
+                />
+                <Button variant="outline" onClick={addGroup} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Skapa grupp
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {groups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Inga grupper än. Skapa den första ovan.
+                  </p>
+                ) : (
+                  groups.map((group) => (
+                    <Badge
+                      key={group.id}
+                      variant="secondary"
+                      className="gap-2 py-1.5 pl-3 pr-1.5 text-sm font-normal"
+                    >
+                      {group.name}
+                      <span className="text-muted-foreground">
+                        {employees.filter((e) => e.group_id === group.id).length}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setPendingDeleteGroup(group);
+                          setConfirmGroupDelete(true);
+                        }}
+                        aria-label={`Ta bort gruppen ${group.name}`}
+                        className="rounded-full p-0.5 transition-colors hover:bg-destructive/20"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <h3 className="text-sm font-medium text-foreground">
-              Medarbetare ({filterShift === ALL_SHIFTS ? employees.length : employees.filter(e => e.shift === filterShift).length})
+              Medarbetare ({visibleEmployees.length})
             </h3>
-            <div className="w-48">
-              <Select value={filterShift} onValueChange={setFilterShift}>
-                <SelectTrigger className="bg-sidebar-input">
-                  <SelectValue placeholder="Välj skift" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_SHIFTS}>Alla skift</SelectItem>
-                  {SHIFTS.map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex gap-2">
+              {!groupsError && (
+                <div className="w-48">
+                  <Select value={filterGroup} onValueChange={setFilterGroup}>
+                    <SelectTrigger className="bg-sidebar-input">
+                      <SelectValue placeholder="Välj grupp" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_GROUPS}>Alla grupper</SelectItem>
+                      <SelectItem value={NO_GROUP}>Utan grupp</SelectItem>
+                      {groups.map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="w-48">
+                <Select value={filterShift} onValueChange={setFilterShift}>
+                  <SelectTrigger className="bg-sidebar-input">
+                    <SelectValue placeholder="Välj skift" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_SHIFTS}>Alla skift</SelectItem>
+                    {SHIFTS.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <div className="grid gap-2">
-            {(filterShift === ALL_SHIFTS ? employees : employees.filter(e => e.shift === filterShift)).length === 0 ? (
+            {visibleEmployees.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                {filterShift === ALL_SHIFTS 
+                {employees.length === 0
                   ? "Inga medarbetare än. Lägg till din första medarbetare ovan."
-                  : `Inga medarbetare i ${filterShift}.`}
+                  : "Inga medarbetare matchar filtret."}
               </p>
             ) : (
-              (filterShift === ALL_SHIFTS ? employees : employees.filter(e => e.shift === filterShift)).map((employee) => (
+              visibleEmployees.map((employee) => (
                 <Card
                   key={employee.id}
                   className="p-4 flex items-center justify-between hover:shadow-md transition-shadow"
@@ -317,7 +536,28 @@ const EmployeeManagement = () => {
                     </Badge>
                     <Badge variant="outline">{employee.shift}</Badge>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
+                    {!groupsError && (
+                      <Select
+                        value={employee.group_id ?? NO_GROUP}
+                        onValueChange={(value) => changeEmployeeGroup(employee, value)}
+                      >
+                        <SelectTrigger
+                          className="h-9 w-44 bg-sidebar-input"
+                          aria-label={`Grupp för ${employee.name}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_GROUP}>Ingen grupp</SelectItem>
+                          {groups.map((group) => (
+                            <SelectItem key={group.id} value={group.id}>
+                              {group.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -362,6 +602,28 @@ const EmployeeManagement = () => {
   stations={stationNames}
   onToggleStation={toggleStation}
 />
+
+      <AlertDialog open={confirmGroupDelete} onOpenChange={setConfirmGroupDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Ta bort gruppen {pendingDeleteGroup?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Medarbetarna i gruppen ligger kvar, men står sedan utan grupp tills
+              du delar in dem på nytt. Inget annat påverkas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => pendingDeleteGroup && deleteGroup(pendingDeleteGroup)}
+            >
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };
