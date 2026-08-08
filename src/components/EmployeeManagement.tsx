@@ -349,76 +349,83 @@ const EmployeeManagement = () => {
 
   /**
    * En rad i medarbetarlistan. Samma markup används både inuti gruppkorten och i
-   * listan utan grupp, så raden måste tåla halva bredden — därför flex-wrap.
+   * listan utan grupp, så raden måste tåla halva bredden. Allt ligger på en rad:
+   * namnet är det enda som får krympa (truncate), resten har fasta mått.
    */
   const renderEmployeeRow = (employee: Employee) => (
     <Card
       key={employee.id}
-      className="p-4 flex flex-wrap items-center justify-between gap-3 hover:shadow-md transition-shadow"
+      className="flex items-center gap-1.5 overflow-hidden p-2 hover:shadow-md transition-shadow"
     >
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => openEmployeeDetails(employee)}
-          className="font-medium hover:text-primary transition-colors cursor-pointer text-left"
+      <button
+        onClick={() => openEmployeeDetails(employee)}
+        title={employee.name}
+        className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary transition-colors cursor-pointer"
+      >
+        {employee.name}
+      </button>
+      <Badge
+        variant={employee.is_active ? "default" : "secondary"}
+        className={`shrink-0 px-2 py-0 text-[11px] font-medium ${
+          employee.is_active ? "bg-success text-success-foreground" : ""
+        }`}
+      >
+        {employee.is_active ? "Aktiv" : "Inaktiv"}
+      </Badge>
+      <Badge
+        variant="outline"
+        title={employee.shift}
+        className="min-w-0 truncate px-2 py-0 text-[11px] font-medium"
+      >
+        {employee.shift}
+      </Badge>
+      {!groupsError && (
+        <Select
+          value={employee.group_id ?? NO_GROUP}
+          onValueChange={(value) => changeEmployeeGroup(employee, value)}
         >
-          {employee.name}
-        </button>
-        <Badge
-          variant={employee.is_active ? "default" : "secondary"}
-          className={employee.is_active ? "bg-success text-success-foreground" : ""}
-        >
-          {employee.is_active ? "Aktiv" : "Inaktiv"}
-        </Badge>
-        <Badge variant="outline">{employee.shift}</Badge>
-      </div>
-      <div className="flex items-center gap-2">
-        {!groupsError && (
-          <Select
-            value={employee.group_id ?? NO_GROUP}
-            onValueChange={(value) => changeEmployeeGroup(employee, value)}
+          <SelectTrigger
+            className="h-8 w-28 shrink-0 gap-1 bg-sidebar-input px-2 text-xs"
+            aria-label={`Grupp för ${employee.name}`}
           >
-            <SelectTrigger
-              className="h-9 w-40 bg-sidebar-input"
-              aria-label={`Grupp för ${employee.name}`}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_GROUP}>Ingen grupp</SelectItem>
-              {groups.map((group) => (
-                <SelectItem key={group.id} value={group.id}>
-                  {group.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_GROUP}>Ingen grupp</SelectItem>
+            {groups.map((group) => (
+              <SelectItem key={group.id} value={group.id}>
+                {group.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => toggleEmployeeStatus(employee.id, employee.is_active)}
+        className="h-8 w-8 shrink-0"
+        title={employee.is_active ? "Inaktivera" : "Aktivera"}
+      >
+        {employee.is_active ? (
+          <UserX className="h-4 w-4" />
+        ) : (
+          <UserCheck className="h-4 w-4" />
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => toggleEmployeeStatus(employee.id, employee.is_active)}
-          className="gap-2"
-          title={employee.is_active ? "Inaktivera" : "Aktivera"}
-        >
-          {employee.is_active ? (
-            <UserX className="h-4 w-4" />
-          ) : (
-            <UserCheck className="h-4 w-4" />
-          )}
-          <span className="sr-only">
-            {employee.is_active ? "Inaktivera" : "Aktivera"}
-          </span>
-        </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => deleteEmployee(employee.id, employee.name)}
-          title="Ta bort"
-        >
-          <Trash2 className="h-4 w-4" />
-          <span className="sr-only">Ta bort</span>
-        </Button>
-      </div>
+        <span className="sr-only">
+          {employee.is_active ? "Inaktivera" : "Aktivera"}
+        </span>
+      </Button>
+      <Button
+        variant="destructive"
+        size="icon"
+        onClick={() => deleteEmployee(employee.id, employee.name)}
+        className="h-8 w-8 shrink-0"
+        title="Ta bort"
+      >
+        <Trash2 className="h-4 w-4" />
+        <span className="sr-only">Ta bort</span>
+      </Button>
     </Card>
   );
 
@@ -601,11 +608,12 @@ const EmployeeManagement = () => {
             </p>
           ) : (
             <div className="space-y-4">
-              {/* Grupperna i två spalter — annars blir listan orimligt lång */}
+              {/* Grupperna i två spalter — annars blir listan orimligt lång.
+                  Först vid xl finns bredd nog för en hel medarbetarrad i en spalt. */}
               {groupsWithMembers.length > 0 && (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 xl:grid-cols-2">
                   {groupsWithMembers.map(({ group, members }) => (
-                    <Card key={group.id} className="p-4 space-y-3">
+                    <Card key={group.id} className="p-3 space-y-3">
                       <div className="flex items-center justify-between">
                         <h4 className="font-semibold text-foreground">{group.name}</h4>
                         <Badge variant="secondary">{members.length}</Badge>
