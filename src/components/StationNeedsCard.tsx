@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "lucide-react";
 
+/** Behovet väljs med knappar — 0 betyder "ingen behövs här". Större antal skrivs i fältet sist. */
+const NEED_CHOICES = Array.from({ length: 11 }, (_, i) => i);
+
 interface StationNeedsCardProps {
   stations: string[];
   /** Stationen som bemannas för hand — behov anges inte för den */
@@ -36,23 +39,65 @@ export const StationNeedsCard = ({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          {stations.map((station) => (
-            <div key={station} className="space-y-2 w-90%">
-              <Label htmlFor={`station-${station}`} className="text-sm font-medium">
-                {station}
-              </Label>
-              <Input
-                id={`station-${station}`}
-                type="number"
-                min="0"
-                value={stationNeeds[station] || 0}
-                onChange={(e) => onUpdateNeed(station, parseInt(e.target.value) || 0)}
-                className="text-center font-semibold bg-sidebar-input large-spinner h-10"
-                disabled={station === manualStationName}
-              />
-            </div>
-          ))}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-6">
+          {stations.map((station) => {
+            const current = stationNeeds[station] || 0;
+            const disabled = station === manualStationName;
+
+            return (
+              <div key={station} className="space-y-2">
+                <Label id={`station-${station}-label`} className="text-sm font-medium">
+                  {station}
+                </Label>
+                {disabled ? (
+                  <p className="flex h-8 items-center text-sm text-muted-foreground">
+                    Bemannas för hand
+                  </p>
+                ) : (
+                  <div
+                    role="group"
+                    aria-labelledby={`station-${station}-label`}
+                    className="flex flex-wrap gap-1"
+                  >
+                    {NEED_CHOICES.map((count) => {
+                      const selected = current === count;
+
+                      return (
+                        <Button
+                          key={count}
+                          type="button"
+                          variant={selected ? "default" : "outline"}
+                          size="icon"
+                          aria-pressed={selected}
+                          aria-label={`${count} personer på ${station}`}
+                          onClick={() => onUpdateNeed(station, count)}
+                          className={`h-8 w-8 text-sm ${
+                            selected ? "font-semibold" : "bg-sidebar-input font-normal"
+                          }`}
+                        >
+                          {count}
+                        </Button>
+                      );
+                    })}
+                    {/* Behövs fler än tio skrivs antalet in för hand */}
+                    <Input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      value={current}
+                      onChange={(e) => onUpdateNeed(station, parseInt(e.target.value) || 0)}
+                      onFocus={(e) => e.target.select()}
+                      aria-label={`Eget antal på ${station}`}
+                      title="Skriv ett eget antal"
+                      className={`no-spinner ml-1 h-8 w-14 bg-sidebar-input px-1 text-center text-sm ${
+                        NEED_CHOICES.includes(current) ? "" : "border-primary font-semibold"
+                      }`}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
         {hasUnsavedChanges && (
           <p className="text-center text-sm text-muted-foreground mb-3">

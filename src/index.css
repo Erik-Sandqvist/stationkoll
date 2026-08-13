@@ -134,3 +134,14 @@ input[type="number"].large-spinner {
 input[type="number"].large-spinner::-moz-number-spinner {
   height: 40px;
 }
+
+/* Döljer pilarna helt — används där antalet väljs med knappar i stället */
+input[type="number"].no-spinner::-webkit-inner-spin-button,
+input[type="number"].no-spinner::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"].no-spinner {
+  -moz-appearance: textfield;
+}
