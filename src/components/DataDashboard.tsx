@@ -228,10 +228,7 @@ const DataDashboard = () => {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Data</p>
           <h2 className="mt-2 text-2xl font-bold tracking-tight">Driftsöversikt</h2>
         </div>
-        <Badge variant="secondary" className="w-fit gap-2 border border-primary/20 bg-primary/5 text-primary">
-          <Activity className="h-3.5 w-3.5" />
-          Live data
-        </Badge>
+        
       </div>
 
       {loading ? (
