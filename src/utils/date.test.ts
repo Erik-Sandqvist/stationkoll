@@ -25,6 +25,7 @@ describe("datumnycklar", () => {
     });
   });
 
+  
   describe("fromDateKey", () => {
     test("tolkar nyckeln som lokal midnatt", () => {
       const date = fromDateKey("2026-08-06");
